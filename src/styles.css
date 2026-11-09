@@ -532,7 +532,10 @@ table.data { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .sheet h2 { font-size: 1.05rem; margin-top: 30px; padding-bottom: 6px; border-bottom: 2px solid #111; }
 .sheet .eyebrow { color: #555; }
 .sheet .data th, .sheet .data td { border-bottom-color: #ddd; color: #111; }
-.sheet .data thead th { background: #fff; color: #555; }
+.sheet .data { font-size: .8rem; }
+.sheet .data thead th { background: #fff; color: #555; position: static; text-transform: none; letter-spacing: 0; white-space: normal; font-size: .72rem; }
+.sheet .data th, .sheet .data td { padding: 6px 6px; }
+.sheet .data .num { font-size: .76rem; }
 .sheet .muted { color: #555; }
 .sheet-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; border-bottom: 3px solid #111; padding-bottom: 16px; margin-bottom: 18px; }
 .sheet-meta { font: .8rem/1.5 var(--mono); text-align: right; color: #444; }

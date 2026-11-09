@@ -77,8 +77,8 @@ export default function Packet({ id }: { id: string }) {
 
         <h2>5. Form 8949 detail</h2>
         <table className="data compact mono-nums tiny-print">
-          <thead><tr>{rows[0].slice(0, 11).map((h, i) => <th key={i}>{String(h)}</th>)}</tr></thead>
-          <tbody>{rows.slice(1).map((r, i) => <tr key={i}>{r.slice(0, 11).map((c, j) => <td key={j} className={j >= 6 && j !== 8 ? 'num' : ''}>{String(c)}</td>)}</tr>)}</tbody>
+          <thead><tr><th>Part</th>{rows[0].slice(3, 11).map((h, i) => <th key={i} className={i >= 3 && i !== 5 ? 'num' : ''}>{String(h)}</th>)}</tr></thead>
+          <tbody>{rows.slice(1).map((r, i) => <tr key={i}><td>{String(r[0]).startsWith('II') ? 'II' : 'I'}</td>{r.slice(3, 11).map((c, j) => <td key={j} className={j >= 3 && j !== 5 ? 'num' : ''}>{String(c)}</td>)}</tr>)}</tbody>
         </table>
 
         <h2>6. Method and limitations</h2>
