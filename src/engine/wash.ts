@@ -316,3 +316,33 @@ export function form8949Rows(res: WashResult, accounts: Account[], year: number)
   ])
   return rows
 }
+
+/** Where one sale's disallowed loss ended up: released on later sales, still in the basis of held shares, or lost to an IRA. */
+export interface Fate { released: { date: string; amount: number; pieceId: string }[]; held: number; lost: number }
+export function fateOf(res: WashResult, pieceId: string): Fate {
+  const byId = new Map(res.pieces.map(p => [p.id, p]))
+  const fate: Fate = { released: [], held: 0, lost: 0 }
+  const walk = (p: Piece, amountIn: number, depth: number) => {
+    if (!p.disallowed || amountIn <= 0 || depth > 50) return
+    fate.lost += amountIn * p.permanent / p.disallowed
+    const moved = amountIn * (p.disallowed - p.permanent) / p.disallowed
+    const basisTotal = p.disallowed - p.permanent
+    let traced = 0
+    for (const x of res.pieces) {
+      const c = x.carriedFrom.find(c => c.pieceId === p.id)
+      if (!c || !basisTotal) continue
+      const part = moved * c.amount / basisTotal
+      traced += part
+      const loss = x.cost - x.proceeds
+      const keep = loss <= 0 ? 0 : x.disallowed / loss
+      if (part * (1 - keep) > 0) fate.released.push({ date: x.sold, amount: part * (1 - keep), pieceId: x.id })
+      if (keep > 0) walk(x, part * keep, depth + 1)
+    }
+    fate.held += Math.max(0, moved - traced)
+  }
+  const start = byId.get(pieceId)
+  if (start) walk(start, start.disallowed, 0)
+  const merged = new Map<string, { date: string; amount: number; pieceId: string }>()
+  for (const r of fate.released) { const m = merged.get(r.date); if (m) m.amount += r.amount; else merged.set(r.date, { ...r }) }
+  return { released: [...merged.values()].map(r => ({ ...r, amount: Math.round(r.amount) })).sort((a, b) => a.date.localeCompare(b.date)), held: Math.round(fate.held), lost: Math.round(fate.lost) }
+}

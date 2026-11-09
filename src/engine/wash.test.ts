@@ -306,3 +306,27 @@ test('reconciliation splits our extra disallowed loss into cross-account, IRA an
   assert.equal(line.ours, 26000)
   assert.equal(line.unexplained, 200)
 })
+
+test('fateOf follows a deferral through a chain to its release, or into an IRA', async () => {
+  const { fateOf } = await import('./wash.ts')
+  const r = run([buy('2025-01-02', 10, 50), sell('2025-02-03', 10, 40), buy('2025-02-10', 10, 42), sell('2025-03-03', 10, 38), buy('2025-03-12', 10, 39), sell('2025-06-02', 10, 35)])
+  const f = fateOf(r, r.pieces[0].id)
+  assert.deepEqual(f.released.map(x => [x.date, x.amount]), [['2025-06-02', 10000]])
+  assert.equal(f.held, 0)
+  const held = run([buy('2025-01-02', 10, 50), sell('2025-02-03', 10, 40), buy('2025-02-10', 6, 42), buy('2025-02-11', 4, 42, 'XYZ', 'ira')])
+  const g = fateOf(held, held.pieces[0].id)
+  assert.equal(g.held, 6000)
+  assert.equal(g.lost, 4000)
+})
+
+test('snapshots compare totals, tickers and which wash sales appeared', async () => {
+  const { makeSnapshot, compareSnapshots } = await import('./snapshot.ts')
+  const early = [buy('2025-01-02', 10, 50), sell('2025-02-03', 10, 40)]
+  const later = [...early, buy('2025-02-10', 10, 41)]
+  const a = makeSnapshot('a', 2025, 'Before', run(early), brokerView(early, ACCTS, DEFAULT_SETTINGS), ACCTS, {}, early.length)
+  const b = makeSnapshot('b', 2025, 'After', run(later), brokerView(later, ACCTS, DEFAULT_SETTINGS), ACCTS, {}, later.length)
+  const c = compareSnapshots(a, b)
+  assert.equal(c.totals.find(t => t.key === 'disallowed')!.delta, 10000)
+  assert.equal(c.added.length, 1)
+  assert.equal(c.tickers[0].label, 'XYZ')
+})

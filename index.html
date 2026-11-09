@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-default-mode="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wash Sale Lens: explain your 1099-B wash sales, catch cross-account ones, harvest safely</title>
+    <meta name="description" content="See where every disallowed wash sale loss on your 1099-B went, catch the ones your broker can't see across accounts and IRAs, and plan tax-loss harvesting without triggering new ones. Robinhood, Fidelity, Schwab and IBKR. Runs in your browser. Not tax advice." />
+    <meta name="theme-color" content="#110e08" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='16' fill='%23ccff00'/><text x='16' y='21' font-family='Georgia,serif' font-size='14' font-style='italic' text-anchor='middle' fill='%23110e08'>WL</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search).get('mode')
+        var m = q === 'light' || q === 'dark' ? q : localStorage.getItem('themeMode')
+        document.documentElement.dataset.themeMode = m === 'light' || m === 'dark' ? m : document.documentElement.dataset.defaultMode
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
