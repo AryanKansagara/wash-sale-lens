@@ -1,6 +1,6 @@
 // The lot timeline: lots as bars across time, a disallowed loss visibly flowing into the replacement
 // lot's basis, and the release on the final sale. Driven entirely by the engine's output.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { addDays, diffDays } from './engine/dates.ts'
 import type { Txn, WashResult } from './engine/types.ts'
 import { WINDOW, released } from './engine/wash.ts'
@@ -71,9 +71,19 @@ export function buildStory(res: WashResult, txns: Txn[], buyIds: Set<string>, sa
   return { lanes: [...lanes.values()], steps, from: addDays(from, -12), to: addDays(to, 40), symbol: buys[0]?.symbol ?? '' }
 }
 
-const W = 760, PADL = 8, PADR = 8, TOP = 34, LANE = 46, BAR = 30
+const PADL = 8, PADR = 8, TOP = 34, LANE = 46, BAR = 30
 
 export function LotTimeline({ story, step, onStep, compact }: { story: Story; step: number; onStep?(i: number): void; compact?: boolean }) {
+  // The drawing width follows the container (min 420) so labels stay readable on phones.
+  const box = useRef<HTMLDivElement>(null)
+  const [W, setW] = useState(760)
+  useEffect(() => {
+    const el = box.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([e]) => setW(Math.max(420, Math.min(760, Math.round(e.contentRect.width)))))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const span = Math.max(1, diffDays(story.from, story.to))
   const x = (d: string) => PADL + (W - PADL - PADR) * Math.min(1, Math.max(0, diffDays(story.from, d) / span))
   const H = TOP + story.lanes.length * LANE + 28
@@ -91,7 +101,7 @@ export function LotTimeline({ story, step, onStep, compact }: { story: Story; st
   const windowSale = cur && (cur.kind === 'sale' || cur.kind === 'wash' || cur.kind === 'release') && cur.saleDate ? cur.saleDate : null
 
   return (
-    <svg className={`lot-timeline${compact ? ' compact' : ''}`} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Lot timeline for ${story.symbol}: ${cur?.title ?? ''}`}>
+    <div ref={box}><svg className={`lot-timeline${compact ? ' compact' : ''}`} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Lot timeline for ${story.symbol}: ${cur?.title ?? ''}`}>
       <defs>
         <linearGradient id="lt-adj" x1="0" x2="1"><stop offset="0" stopColor="var(--neon)" stopOpacity="1" /><stop offset="1" stopColor="var(--neon)" stopOpacity=".55" /></linearGradient>
         <pattern id="lt-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--loss)" fillOpacity=".18" /><line x1="0" y1="0" x2="0" y2="6" stroke="var(--loss)" strokeWidth="2" /></pattern>
@@ -113,7 +123,7 @@ export function LotTimeline({ story, step, onStep, compact }: { story: Story; st
         const moved = adj.filter(a => !a.permanent).reduce((s, a) => s + a.amount, 0)
         const lost = adj.filter(a => a.permanent).reduce((s, a) => s + a.amount, 0)
         const total = l.cost + moved
-        const capW = moved ? Math.max(10, Math.min(80, (x1 - x0) * moved / total)) : 0
+        const capW = moved ? Math.max(4, Math.min(80, (x1 - x0) * moved / total, x1 - x0 - BAR / 2)) : 0
         const isCur = cur?.lane === l.key
         const labelW = (String(shares(l.qty)).length + l.symbol.length + money(total, { cents: false }).length + (moved ? money(moved, { cents: false }).length + 7 : 0) + (l.ira ? 6 : 0) + 4) * 7.2
         const inside = x1 - x0 - capW - 20 > labelW
@@ -157,7 +167,7 @@ export function LotTimeline({ story, step, onStep, compact }: { story: Story; st
         return <g key={`rel-${step}`} className="lt-release" transform={`translate(${Math.min(cx, W - 120)},${cy})`}><circle r="22" className="lt-ring" /><rect x="10" y="-30" width="104" height="24" rx="12" /><text x="62" y="-14" textAnchor="middle">{money(cur.amount ?? 0, { cents: false })} counts</text></g>
       })()}
       <line className="lt-now" x1={x(nowDate)} x2={x(nowDate)} y1={TOP - 12} y2={H - 22} />
-    </svg>
+    </svg></div>
   )
 }
 

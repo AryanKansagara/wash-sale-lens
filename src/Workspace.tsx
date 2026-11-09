@@ -18,7 +18,9 @@ export default function Workspace() {
     if (!s || list === null || busy) return
     if (!SAMPLES.some(x => x.id === s)) return
     setBusy(s)
-    void createSampleProject(s).then(p => go(`/app/p/${p.id}${tab ? '/' + tab : ''}`, { replace: true }))
+    q.delete('sample'); q.delete('tab')
+    const rest = q.toString()
+    void createSampleProject(s).then(p => go(`/app/p/${p.id}${tab ? '/' + tab : ''}${rest ? '?' + rest : ''}`, { replace: true }))
   }, [list, busy])
 
   const openSample = async (id: string) => { setBusy(id); const p = await createSampleProject(id); go(`/app/p/${p.id}`) }
