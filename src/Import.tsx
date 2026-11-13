@@ -101,7 +101,7 @@ export default function DataTab({ project, ds, update, reload }: TabProps) {
           <div className={`dropzone${drag ? ' over' : ''}`} onDragOver={e => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={e => { e.preventDefault(); setDrag(false); void readFiles(e.dataTransfer.files) }}>
             <div className="drop-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg></div>
             <p style={{ fontSize: '1.1rem' }}><strong>Drop broker CSVs here</strong> or <button type="button" className="linkish" onClick={() => input.current?.click()}>choose files</button></p>
-            <p className="muted small">Robinhood account activity report, Fidelity account history, Schwab transactions, IBKR Flex Query (Trades), a generic CSV, or 1099-B detail. Import every account, including IRAs: that is where the hidden wash sales are.</p>
+            <p className="muted small">Robinhood account activity report, Fidelity account history, Schwab transactions, IBKR Flex Query or Activity Statement, a generic CSV, or 1099-B detail (including Form 8949 style files). Import every account, including IRAs: that is where the hidden wash sales are.</p>
             <input ref={input} type="file" accept=".csv,.tsv,.txt,text/csv" multiple hidden onChange={e => { if (e.target.files) void readFiles(e.target.files); e.target.value = '' }} />
             {busy && <p role="status"><span className="spinner" /> Reading files</p>}
           </div>
