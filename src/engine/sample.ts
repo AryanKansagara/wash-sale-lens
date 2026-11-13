@@ -216,7 +216,9 @@ function fidelity(rows: Row[]): string {
     const act = r.kind === 'buy' ? `YOU BOUGHT ${name} (${r.s}) (Cash)` : `YOU SOLD ${name} (${r.s}) (Cash)`
     return line([mdy2(r.d), act, r.s, name, 'Cash', r.kind === 'buy' ? fmtQ(r.q) : `-${fmtQ(r.q)}`, r.p.toFixed(2), '', '', '', (r.kind === 'buy' ? -r.amt : r.amt).toFixed(2), mdy2(addDays(r.d, 1))])
   }).reverse()
-  return ['', '', head, ...body, '', '', '"The data and information in this spreadsheet is provided to you solely for your use and is not for distribution."', '"Brokerage services are provided by Fidelity Brokerage Services LLC (FBS), 900 Salem Street, Smithfield, RI 02917."', `"Date downloaded ${mdy2('2026-11-06')} 9:14 pm"`].join('\n') + '\n'
+  const first = rows[0]?.d ?? '2025-01-02'
+  const eft = line([mdy2(addDays(first, -3)), ' Electronic Funds Transfer Received (Cash)', ' ', 'No Description', 'Cash', '0.000', '', '', '', '', '10000', ''])
+  return ['', '', head, ...body, eft, '', '', '"The data and information in this spreadsheet is provided to you solely for your use and is not for distribution."', '"Brokerage services are provided by Fidelity Brokerage Services LLC (FBS), 900 Salem Street, Smithfield, RI 02917."', `"Date downloaded ${mdy2('2026-11-06')} 9:14 pm"`].join('\n') + '\n'
 }
 
 function schwab(rows: Row[]): string {
@@ -228,7 +230,11 @@ function schwab(rows: Row[]): string {
     if (r.kind === 'drip') return line([mdy2(r.d), 'Reinvest Shares', r.s, name, fmtQ(r.q), money(r.p), '', money(-r.amt)])
     return line([mdy2(r.d), r.kind === 'buy' ? 'Buy' : 'Sell', r.s, name, fmtQ(r.q), money(r.p), '', money(r.kind === 'buy' ? -r.amt : r.amt)])
   }).reverse()
-  return [head, ...body].join('\n') + '\n'
+  const first = rows[0]?.d ?? '2025-01-02'
+  const total = rows.reduce((s, r) => s + (r.kind === 'buy' || r.kind === 'drip' ? -r.amt : r.amt), 0) + 10000
+  return ['"Transactions  for account Individual ...482 as of 11/06/2026 21:14:02 ET"', head, ...body,
+    line([mdy2(addDays(first, -3)), 'MoneyLink Transfer', '', 'Tfr BANK, SYNTHETIC SAMPLE', '', '', '', money(10000)]),
+    line(['Transactions Total', '', '', '', '', '', '', money(Math.round(total * 100) / 100)])].join('\n') + '\n'
 }
 
 const EMIT: Record<Broker, (rows: Row[]) => string> = { robinhood, fidelity, schwab, ibkr: schwab, generic: schwab }

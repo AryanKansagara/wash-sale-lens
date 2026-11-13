@@ -16,11 +16,11 @@ export const KINDS: Record<Kind, { title: string; fields: FieldSpec[] }> = {
       F('action', 'Action / type', 'str', ['trans_code', 'action', 'buy/sell', 'type', 'transaction_type', 'side', 'transactiontype'], false, 'Or a signed quantity'),
       F('symbol', 'Symbol', 'str', ['instrument', 'symbol', 'ticker', 'underlyingsymbol'], true),
       F('qty', 'Quantity', 'num', ['quantity', 'shares', 'qty'], true),
-      F('price', 'Price', 'num', ['price', 'price_($)', 'tradeprice', 'trade_price', 'price_per_share']),
+      F('price', 'Price', 'num', ['price', 'price_($)', 'tradeprice', 'trade_price', 't._price', 'price_per_share']),
       F('amount', 'Amount (net)', 'num', ['amount', 'amount_($)', 'netcash', 'net_cash', 'net_amount', 'proceeds', 'total']),
-      F('fees', 'Fees and commission', 'num', ['fees_&_comm', 'commission_($)', 'ibcommission', 'commission', 'fees', 'fees_($)', 'fee']),
+      F('fees', 'Fees and commission', 'num', ['fees_&_comm', 'commission_($)', 'ibcommission', 'comm/fee', 'commission', 'fees', 'fees_($)', 'fee']),
       F('desc', 'Description', 'str', ['description', 'security_description', 'name']),
-      F('asset', 'Asset class', 'str', ['assetclass', 'asset_class', 'security_type', 'type_of_security']),
+      F('asset', 'Asset class', 'str', ['assetclass', 'asset_class', 'asset_category', 'security_type', 'type_of_security']),
       F('lotDate', 'Lot acquired (specific ID)', 'date', ['lot_date', 'acquired', 'date_acquired', 'opendatetime', 'lot_acquired']),
       F('ratio', 'Split ratio', 'num', ['ratio', 'split_ratio']),
       F('cusip', 'CUSIP', 'str', ['cusip']),
@@ -29,29 +29,47 @@ export const KINDS: Record<Kind, { title: string; fields: FieldSpec[] }> = {
   form1099: {
     title: '1099-B detail',
     fields: [
-      F('symbol', 'Description / symbol', 'str', ['symbol', 'description', 'security_description', 'security', 'description_of_property', '1a_description'], true),
-      F('sold', 'Date sold', 'date', ['date_sold', 'date_sold_or_disposed', 'sale_date', '1c_date_sold', 'closed_date'], true),
-      F('acquired', 'Date acquired', 'date', ['date_acquired', 'acquired', '1b_date_acquired', 'open_date']),
+      F('symbol', 'Description / symbol', 'str', ['symbol', 'symbol(cusip)', 'description', 'security_description', 'security', 'description_of_property', '1a_description'], true),
+      F('sold', 'Date sold', 'date', ['date_sold', 'date_sold_or_disposed', 'date_sold_or_disposed_of', 'sale_date', '1c_date_sold', 'closed_date'], true),
+      F('acquired', 'Date acquired', 'date', ['date_acquired', 'acquired', '1b_date_acquired', 'open_date', 'opened_date']),
       F('proceeds', 'Proceeds', 'num', ['proceeds', 'gross_proceeds', '1d_proceeds', 'sales_price'], true),
-      F('cost', 'Cost basis', 'num', ['cost_basis', 'cost', 'cost_or_other_basis', '1e_cost_basis', 'adjusted_cost_basis']),
-      F('wash', 'Wash sale loss disallowed', 'num', ['wash_sale_loss_disallowed', 'wash_sale', 'wash_sale_disallowed', '1g_wash_sale_loss_disallowed', 'wash_sale_loss', 'disallowed_loss'], true),
-      F('gain', 'Gain or loss', 'num', ['gain_or_loss', 'gain/loss', 'realized_gain/loss', 'gain_(loss)', 'net_gain_or_loss']),
+      F('cost', 'Cost basis', 'num', ['cost_basis', 'cost', 'cost_or_other_basis', '1e_cost_basis', 'adjusted_cost_basis', 'cost_basis_(cb)']),
+      F('wash', 'Wash sale loss disallowed', 'num', ['wash_sale_loss_disallowed', 'wash_sale', 'wash_sale_disallowed', '1g_wash_sale_loss_disallowed', 'wash_sale_loss', 'disallowed_loss', 'amount_of_adjustment', 'adjustment_amount', 'adjustment'], true, 'Form 8949 style files: the adjustment column, kept only on code W rows'),
+      F('code', 'Adjustment code', 'str', ['code(s)_from_instructions', 'adjustment_code', 'code(s)', 'code']),
+      F('gain', 'Gain or loss', 'num', ['gain_or_loss', 'gain/loss', 'realized_gain/loss', 'gain_(loss)', 'gain_or_(loss)', 'net_gain_or_loss', 'total_gain/loss_($)']),
     ],
   },
 }
 
-export const norm = (h: string) => h.trim().toLowerCase().replace(/^"|"$/g, '').replace(/\s+/g, '_')
+// Form 8949 column letters ("(d) Proceeds") are dropped so the plain names match.
+export const norm = (h: string) => h.trim().toLowerCase().replace(/^"|"$/g, '').replace(/\s+/g, '_').replace(/^\([a-h]\)_/, '')
 
 export interface Format { id: Broker | '1099'; kind: Kind; label: string; test(hs: Set<string>): boolean }
 export const FORMATS: Format[] = [
   { id: 'robinhood', kind: 'activity', label: 'Robinhood account activity report', test: h => h.has('activity_date') && h.has('trans_code') && h.has('instrument') },
-  { id: 'fidelity', kind: 'activity', label: 'Fidelity account history', test: h => h.has('run_date') && h.has('action') && (h.has('amount_($)') || h.has('price_($)')) },
+  { id: 'fidelity', kind: 'activity', label: 'Fidelity account history', test: h => h.has('run_date') && h.has('action') && h.has('symbol') },
   { id: 'schwab', kind: 'activity', label: 'Charles Schwab transactions', test: h => h.has('fees_&_comm') && h.has('action') && h.has('date') },
   { id: 'ibkr', kind: 'activity', label: 'Interactive Brokers Flex Query (Trades)', test: h => (h.has('tradedate') || h.has('date/time')) && (h.has('tradeprice') || h.has('netcash') || h.has('ibcommission')) },
-  { id: '1099', kind: 'form1099', label: '1099-B detail (consolidated CSV)', test: h => [...h].some(x => x.includes('wash')) && [...h].some(x => x.includes('proceeds')) },
+  { id: 'ibkr', kind: 'activity', label: 'Interactive Brokers Activity Statement (Trades)', test: h => h.has('datadiscriminator') && h.has('t._price') },
+  { id: '1099', kind: 'form1099', label: '1099-B detail (consolidated CSV)', test: h => [...h].some(x => x.includes('wash') || x === 'amount_of_adjustment' || x === 'adjustment_amount' || x === 'adjustment') && [...h].some(x => x.includes('proceeds') || x === 'sales_price') },
 ]
 
 export type Mapping = Record<string, number>
+
+/** IBKR Activity Statements stack many sections in one CSV ("Trades,Header,..." / "Trades,Data,Order,..."). Keeps the
+ * stock and option Trades section only, dropping subtotals, totals and closed-lot detail rows; line numbers are kept. */
+export function trades(csv: { rows: string[][]; lines: number[] }): { rows: string[][]; lines: number[] } {
+  const h = csv.rows.findIndex(r => r[0] === 'Trades' && r[1] === 'Header')
+  if (h < 0) return csv
+  const head = csv.rows[h].join('|')
+  // Forex and other asset classes get their own Trades header with different columns; skip their rows.
+  let current = ''
+  const keep = csv.rows.map((r, i) => {
+    if (r[0] === 'Trades' && r[1] === 'Header') { current = r.join('|'); return i === h }
+    return r[0] === 'Trades' && r[1] === 'Data' && /^(Order|Trade)$/.test(r[2] ?? '') && current === head
+  })
+  return { rows: csv.rows.filter((_, i) => keep[i]), lines: csv.lines.filter((_, i) => keep[i]) }
+}
 
 export function autoMap(kind: Kind, headers: string[]): Mapping {
   const hs = headers.map(norm)
@@ -91,12 +109,13 @@ const OPTION_TEXT = /(^-?[A-Z]{1,6}\s*\d{6}[CP]\d|\b(call|put)\b.*\$\d|\b\d{1,2}
 export function classify(action: string, desc: string, qty: number, asset: string, symbol: string): TxnKind | 'skip' {
   const a = action.trim()
   const t = `${a} ${desc}`.toLowerCase()
-  if (/^(opt|fop|war)/i.test(asset) || OPTION_CODES.test(a) || OPTION_TEXT.test(symbol) || OPTION_TEXT.test(desc) || /\b(to open|to close|assigned|exercised|expired)\b/.test(t)) return 'option'
+  if (/^forex|^cash$/i.test(asset)) return 'skip'
+  if (/^(opt|fop|war)|option|warrant|future/i.test(asset) || OPTION_CODES.test(a) || OPTION_TEXT.test(symbol) || OPTION_TEXT.test(desc) || /\b(to open|to close|assigned|exercised|expired)\b/.test(t)) return 'option'
   if (/short|buy to cover/.test(t)) return 'short'
   if (/^(spl|spr)$/i.test(a) || /\bsplit\b/.test(t) || /^distribution/i.test(a)) return 'split'
-  if (/^acati$/i.test(a)) return 'transfer_in'
-  if (/^acato$/i.test(a)) return 'transfer_out'
-  if (/transfer|journal|acat|received from|delivered/.test(t)) return qty < 0 || /\bto\b|out|delivered/.test(t) ? 'transfer_out' : 'transfer_in'
+  if (/^acat[io]$/i.test(a)) return !qty ? 'skip' : /i$/i.test(a) ? 'transfer_in' : 'transfer_out'
+  // Cash moving in or out (EFT, MoneyLink, journals of cash) has no shares: not a trade.
+  if (/transfer|journal|acat|received from|delivered/.test(t)) return !qty ? 'skip' : qty < 0 || /\bto\b|out|delivered/.test(t) ? 'transfer_out' : 'transfer_in'
   if (/^(buy|bot|b)$/i.test(a) || /you bought|^bought|reinvest(ment)? shares|^reinvestment|\bbuy\b|recurring/.test(t)) return 'buy'
   if (/^(sell|sld|s)$/i.test(a) || /you sold|^sold|\bsell\b/.test(t)) return 'sell'
   if (!a && qty) return qty > 0 ? 'buy' : 'sell'
@@ -118,7 +137,7 @@ export interface Validated { rows: ParsedTxn[]; issues: Issue[]; skipped: number
 export interface Row1099 { line: number; symbol: string; sold: string; acquired?: string; proceeds: number; cost: number; wash: number; gain: number }
 
 const cents = (v: number) => Math.round(v * 100)
-const cleanSymbol = (s: string) => s.trim().replace(/^"|"$/g, '').toUpperCase()
+const cleanSymbol = (s: string) => s.trim().replace(/^"|"$/g, '').replace(/\*+$/, '').trim().toUpperCase()
 
 /** Turns CSV records into transactions, with a report naming the line of every skipped or broken row. */
 export function validate(csv: { rows: string[][]; lines: number[] }, map: Mapping, headerRow: number, file = 'file'): Validated {
@@ -128,6 +147,8 @@ export function validate(csv: { rows: string[][]; lines: number[] }, map: Mappin
   if (issues.length) return { rows: [], issues, skipped: total, total }
   const get = (rec: string[], k: string) => map[k] === undefined ? '' : (rec[map[k]] ?? '').trim()
   const header = csv.rows[headerRow].map(norm).join('|')
+  // A column called Proceeds (IBKR statements, many generic files) is gross: commission is a separate column.
+  const gross = map.amount !== undefined && map.fees !== undefined && norm(csv.rows[headerRow][map.amount] ?? '') === 'proceeds'
   const out: ParsedTxn[] = []
   let skipped = 0
   for (let r = headerRow + 1; r < csv.rows.length; r++) {
@@ -165,7 +186,7 @@ export function validate(csv: { rows: string[][]; lines: number[] }, map: Mappin
     const amt = parseNum(get(rec, 'amount'))
     const fees = Math.abs(parseNum(get(rec, 'fees'))) || 0
     let amount: number
-    if (!Number.isNaN(amt) && amt !== 0) amount = Math.abs(amt)
+    if (!Number.isNaN(amt) && amt !== 0) amount = gross ? Math.abs(amt) + (kind === 'sell' ? -fees : fees) : Math.abs(amt)
     else if (!Number.isNaN(price)) amount = kind === 'sell' ? qty * price - fees : qty * price + fees
     else if (kind === 'transfer_in' || kind === 'transfer_out') amount = 0
     else { skipped++; issues.push({ line, message: `${kind === 'buy' ? 'Buy' : 'Sell'} of ${symbol} has neither price nor amount` }); continue }
@@ -191,11 +212,14 @@ export function validate1099(csv: { rows: string[][]; lines: number[] }, map: Ma
     const rec = csv.rows[r], line = csv.lines[r]
     const sold = parseDate(get(rec, 'sold'))
     if (!sold) { issues.push({ line, message: `Row skipped: date sold "${get(rec, 'sold').slice(0, 20)}" is not a date (totals and notes are skipped)`, level: 'skip' }); continue }
-    const proceeds = parseNum(get(rec, 'proceeds')), cost = parseNum(get(rec, 'cost')), wash = parseNum(get(rec, 'wash')), gain = parseNum(get(rec, 'gain'))
+    const proceeds = parseNum(get(rec, 'proceeds')), cost = parseNum(get(rec, 'cost')), gain = parseNum(get(rec, 'gain'))
+    // Form 8949 style files carry every adjustment in one column; only code W is a wash sale.
+    const code = get(rec, 'code').toUpperCase()
+    const wash = map.code !== undefined && !code.includes('W') ? 0 : parseNum(get(rec, 'wash'))
     if (Number.isNaN(proceeds)) { issues.push({ line, message: `Proceeds "${get(rec, 'proceeds')}" is not a number` }); continue }
     const c = Number.isNaN(cost) ? NaN : cost
     rows.push({
-      line, symbol: get(rec, 'symbol').split(/\s|,/)[0].toUpperCase(), sold, acquired: parseDate(get(rec, 'acquired')) ?? undefined,
+      line, symbol: get(rec, 'symbol').replace(/^\s*[\d.,]+\s*(sh|shs|shares?)\.?\s+(of\s+)?/i, '').split(/[\s,(]/)[0].replace(/\*+$/, '').toUpperCase(), sold, acquired: parseDate(get(rec, 'acquired')) ?? undefined,
       proceeds: cents(proceeds), cost: Number.isNaN(c) ? 0 : cents(c), wash: Number.isNaN(wash) ? 0 : cents(Math.abs(wash)),
       gain: Number.isNaN(gain) ? cents(proceeds - (Number.isNaN(c) ? 0 : c) + (Number.isNaN(wash) ? 0 : Math.abs(wash))) : cents(gain),
     })

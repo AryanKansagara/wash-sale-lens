@@ -10,8 +10,8 @@ Explains every wash sale on your 1099-B, catches the ones your broker can't see 
 
 ## Features
 
-- **Import** Robinhood account activity reports, Fidelity history, Schwab transactions, IBKR Flex Query trades, a generic CSV, and 1099-B detail. Format detection, column mapping and a line-numbered validation report. Multiple accounts per project, each taxable, IRA or Roth.
-- **Engine** (plain TypeScript, 50 tests): FIFO or specific-ID lots, the 61-day window, replacement shares matched in acquisition order, partial wash sales by share count, basis adjustment and holding-period tacking, chains and release on final sale, cross-account and IRA/Roth (Rev. Rul. 2008-5) matching, splits, optional substantially-identical groups.
+- **Import** Robinhood account activity reports, Fidelity history, Schwab transactions, IBKR Flex Query trades or Activity Statements, a generic CSV, and 1099-B detail (broker CSVs, Schwab Realized Gain/Loss, Form 8949 style files from tax software). Format detection, column mapping and a line-numbered validation report. Multiple accounts per project, each taxable, IRA or Roth.
+- **Engine** (plain TypeScript, 60 tests, including the IRS Publication 550 worked examples and fixtures that follow each broker's real export layout): FIFO or specific-ID lots, the 61-day window, replacement shares matched in acquisition order, partial wash sales by share count, basis adjustment and holding-period tacking, chains and release on final sale, cross-account and IRA/Roth (Rev. Rul. 2008-5) matching, splits, optional substantially-identical groups.
 - **Why is this loss disallowed?** A step-by-step lot timeline for every wash sale: the shares, the dates, and where the basis went next.
 - **Form 8949** rows with code W and column (g), as a CSV.
 - **1099-B check**: rebuilds what your broker could see and explains every dollar of difference.

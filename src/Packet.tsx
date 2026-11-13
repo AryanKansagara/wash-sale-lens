@@ -52,10 +52,10 @@ export default function Packet({ id }: { id: string }) {
         </table>
 
         <h2>3. Reconciliation to Form 1099-B box 1g</h2>
-        <table className="data compact mono-nums">
+        <div className="table-wrap"><table className="data compact mono-nums">
           <thead><tr><th>Account</th><th className="num">1099-B 1g</th><th className="num">Broker-visible</th><th className="num">Cross-account</th><th className="num">IRA / Roth</th><th className="num">Equivalents</th><th className="num">Chain effects</th><th className="num">All accounts</th></tr></thead>
           <tbody>{rec.map(r => <tr key={r.accountId}><td>{name(r.accountId)}</td><td className="num">{r.reported === undefined ? 'not entered' : money(r.reported)}</td><td className="num">{money(r.broker)}</td><td className="num">{money(r.crossAccount)}</td><td className="num">{money(r.ira)}</td><td className="num">{money(r.equivalents)}</td><td className="num">{money(r.knockOn)}</td><td className="num"><b>{money(r.ours)}</b></td></tr>)}</tbody>
-        </table>
+        </table></div>
         <p className="small">“Broker-visible” rebuilds what the broker can compute: same account, same ticker. Differences are wash sales a broker is not required to track (Form 8949 instructions; Pub. 550).</p>
 
         <h2>4. Each wash sale</h2>
@@ -76,10 +76,10 @@ export default function Packet({ id }: { id: string }) {
         )}
 
         <h2>5. Form 8949 detail</h2>
-        <table className="data compact mono-nums tiny-print">
+        <div className="table-wrap"><table className="data compact mono-nums tiny-print">
           <thead><tr><th>Part</th>{rows[0].slice(3, 11).map((h, i) => <th key={i} className={i >= 3 && i !== 5 ? 'num' : ''}>{String(h)}</th>)}</tr></thead>
           <tbody>{rows.slice(1).map((r, i) => <tr key={i}><td>{String(r[0]).startsWith('II') ? 'II' : 'I'}</td>{r.slice(3, 11).map((c, j) => <td key={j} className={j >= 3 && j !== 5 ? 'num' : ''}>{String(c)}</td>)}</tr>)}</tbody>
-        </table>
+        </table></div>
 
         <h2>6. Method and limitations</h2>
         <ul className="small">

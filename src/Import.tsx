@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { toCsv } from './engine/csv.ts'
-import { autoMap, detect, KINDS, mergeImport, parseCsv, validate, validate1099, type Kind, type Mapping } from './engine/importer.ts'
+import { autoMap, detect, KINDS, mergeImport, parseCsv, trades, validate, validate1099, type Kind, type Mapping } from './engine/importer.ts'
 import { ACCOUNT_TYPES, SAMPLES, sampleFiles } from './engine/sample.ts'
 import type { Account, AccountType, Broker, Issue } from './engine/types.ts'
 import { yearOf } from './engine/wash.ts'
@@ -29,7 +29,7 @@ export default function DataTab({ project, ds, update, reload }: TabProps) {
     const next: Pending[] = []
     for (const f of [...files]) {
       if (f.size > 40_000_000) { toast(`${f.name} is over 40 MB. Export a shorter date range.`, { tone: 'error' }); continue }
-      const csv = parseCsv(await f.text())
+      const csv = trades(parseCsv(await f.text()))
       if (csv.rows.length < 2) { toast(`${f.name} has no rows.`, { tone: 'error' }); continue }
       const d = detect(csv.rows)
       next.push({ id: uuid(), name: f.name, format: d.format, broker: d.broker, kind: d.kind, headerRow: d.headerRow, csv, map: d.map, accountId: pickAccount(d.broker) })

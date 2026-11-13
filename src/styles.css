@@ -551,6 +551,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: .9rem; }
   .sheet { box-shadow: none; margin: 0; padding: 0; max-width: none; border-radius: 0; }
   .sheet h2 { break-after: avoid; }
   .packet-washes li, tr { break-inside: avoid; }
+  .table-wrap { overflow: visible; }
 }
 
 /* ---------- Responsive ---------- */
@@ -574,6 +575,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: .9rem; }
   .kpis, .kpis.three { grid-template-columns: 1fr 1fr; }
   .panel { padding: 18px; }
   .data.compact { font-size: .8rem; }
+  .part dl { grid-template-columns: 1fr 1fr; }
   .data.compact th, .data.compact td { padding: 6px; }
   .wf { grid-template-columns: minmax(0, 1fr) 70px auto; }
   .wf b { min-width: 0; }

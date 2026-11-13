@@ -37,14 +37,14 @@ export default function Docs() {
         <ol>
           <li>Go to <b>Accounts &amp; Trade</b> → <b>Portfolio</b>, select the account, then <b>Activity &amp; Orders</b>.</li>
           <li>Set the date range (export longer ranges in pieces if needed) and choose <b>Download</b> (the CSV icon).</li>
-          <li>The file (often <code>Accounts_History.csv</code>) starts with blank lines; the importer finds the header row (<code>Run Date, Action, Symbol, …, Amount ($)</code>) and skips the disclaimer at the bottom. <code>YOU BOUGHT</code>, <code>YOU SOLD</code> and <code>REINVESTMENT</code> rows are read.</li>
+          <li>The file (often <code>Accounts_History.csv</code>) starts with blank lines; the importer finds the header row (<code>Run Date, Action, Symbol, …, Amount ($)</code>) and skips the disclaimer at the bottom. Both the older layout and the newer one with <code>Account</code>, <code>Account Number</code> and <code>Cash Balance ($)</code> columns are read. <code>YOU BOUGHT</code>, <code>YOU SOLD</code> and <code>REINVESTMENT</code> rows are read; cash rows such as <code>Electronic Funds Transfer Received</code> are skipped, and the <code>**</code> Fidelity puts after core money market symbols (<code>SPAXX**</code>) is dropped.</li>
         </ol>
 
         <h3>Charles Schwab: transaction history</h3>
         <ol>
           <li>Go to <b>Accounts</b> → <b>History</b> → <b>Transactions</b>, pick the account and date range.</li>
           <li>Choose <b>Export</b> and download CSV. Columns: <code>Date, Action, Symbol, Description, Quantity, Price, Fees &amp; Comm, Amount</code>.</li>
-          <li><code>Buy</code>, <code>Sell</code>, <code>Reinvest Shares</code> (tagged DRIP) and <code>Stock Split</code> are read; <code>Reinvest Dividend</code> is the cash leg and is skipped. Dates like “11/03/2025 as of 11/01/2025” use the first date.</li>
+          <li><code>Buy</code>, <code>Sell</code>, <code>Reinvest Shares</code> (tagged DRIP) and <code>Stock Split</code> are read; <code>Reinvest Dividend</code> is the cash leg and is skipped. Dates like “11/03/2025 as of 11/01/2025” use the first date. The account title line above the header, cash rows (<code>MoneyLink Transfer</code>, cash <code>Journal</code>) and the closing <code>Transactions Total</code> row are skipped.</li>
         </ol>
 
         <h3>Interactive Brokers: Flex Query (Trades)</h3>
@@ -53,6 +53,8 @@ export default function Docs() {
           <li>Add the <b>Trades</b> section at execution level with at least <code>Symbol, AssetClass, TradeDate, Quantity, TradePrice, IBCommission, NetCash, Buy/Sell</code> (add <code>CUSIP</code> and <code>Description</code> if you like). Format: <b>CSV</b>, dates <code>yyyyMMdd</code>.</li>
           <li>Run it for your period and download. Signed quantities and repeated header rows are handled; <code>OPT</code> rows are limitations.</li>
         </ol>
+        <h3>Interactive Brokers: Activity Statement (CSV)</h3>
+        <p className="small">The default statement from <b>Performance &amp; Reports</b> → <b>Statements</b> → <b>Activity</b>, format <b>CSV</b>, also works. Only the <code>Trades</code> section is read: <code>Order</code> rows for stocks and options; subtotals, totals, forex conversions and every other section are ignored. <code>Proceeds</code> there is gross, so <code>Comm/Fee</code> is added to buys and taken off sales.</p>
 
         <h2 id="generic">Generic CSV format</h2>
         <p>For any other broker, or to add a transfer with its original cost, use these columns (only date, action, symbol and quantity are required; give price or amount):</p>
@@ -65,7 +67,7 @@ export default function Docs() {
         </ul>
 
         <h2 id="form1099">1099-B totals</h2>
-        <p>On the <b>1099-B check</b> tab, type each taxable account’s totals from the summary page of your consolidated 1099: box 1d (proceeds), box 1e (cost basis), box 1g (wash sale loss disallowed) and the net gain or loss. If your broker offers 1099-B detail as CSV, drop it in instead; rows with a wash sale column are recognised and summed by year.</p>
+        <p>On the <b>1099-B check</b> tab, type each taxable account’s totals from the summary page of your consolidated 1099: box 1d (proceeds), box 1e (cost basis), box 1g (wash sale loss disallowed) and the net gain or loss. If your broker offers 1099-B detail as CSV, drop it in instead; rows with a wash sale column are recognised and summed by year. Also read: Schwab’s <b>Realized Gain/Loss</b> export (<code>Disallowed Loss</code> column), Fidelity closed positions with <code>Symbol(CUSIP)</code>, and Form 8949 style files from tax software (<code>Code(s) from instructions</code>, <code>Amount of adjustment</code>), where only rows with code W count as wash sales. This app’s own Form 8949 CSV reads back in the same way.</p>
         <p><b>Does box 1e already include the wash sale?</b> Box 1e is the adjusted basis, so it already includes losses deferred from earlier wash sales the broker tracked inside that account. Box 1g is this sale’s disallowed loss, added back on Form 8949 in column (g) with code W.</p>
 
         <h2 id="rules">The rules we apply</h2>
