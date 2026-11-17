@@ -33,4 +33,4 @@ npm run build
 
 Optional sync needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`.
 
-Built by Aryan Kansagara. Independent project, not affiliated with Robinhood.
+Built by Aryan Kansagara.

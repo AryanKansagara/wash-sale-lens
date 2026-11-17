@@ -288,7 +288,7 @@ export function Footer() {
       <div className="footer-inner">
         <div className="footer-brand"><Monogram /> <strong>Wash Sale Lens</strong></div>
         <nav className="footer-nav" aria-label="Footer"><Link href="/app">Projects</Link><Link href="/docs">Docs</Link><Link href="/docs#rules">IRS rules</Link><Link href="/settings">Settings</Link></nav>
-        <p>Built by Aryan Kansagara. Independent project, not affiliated with Robinhood.</p>
+        <p>Built by Aryan Kansagara.</p>
         <p className="muted small">Not tax advice. Wash Sale Lens applies IRC §1091, Treas. Reg. §1.1091-1, IRS Publication 550, the Form 8949 instructions and Rev. Rul. 2008-5 as described in the docs; confirm your return with a tax professional. Sample traders are synthetic. Your files are read in your browser.</p>
       </div>
     </footer>
