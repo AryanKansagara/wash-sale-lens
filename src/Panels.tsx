@@ -68,7 +68,7 @@ function Washes({ project, ds, a, year }: TabProps) {
       )}
 
       {washes.length === 0 ? (
-        <Empty title={`No wash sales in ${year}`}><p className="muted">No loss sale in {year} had substantially identical shares bought 30 days before or after it in any account. {s.released ? `${money(s.released)} of earlier deferrals was released.` : ''}</p></Empty>
+        <Empty title={`No wash sales in ${year}`}><p className="muted">No loss sale in {year} had replacement shares bought 30 days before or after it in any account. {s.released ? `${money(s.released)} of earlier deferrals was released.` : ''}</p></Empty>
       ) : (
         <>
           <div className="grid-main">
