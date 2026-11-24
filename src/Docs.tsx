@@ -31,7 +31,7 @@ export default function Docs() {
           <li>Choose <b>Generate new report</b>, pick the account (individual or IRA, one at a time) and a custom date range. Robinhood prepares it in the background; you get a notification when it is ready.</li>
           <li>Download the CSV. It has the columns <code>Activity Date, Process Date, Settle Date, Instrument, Description, Trans Code, Quantity, Price, Amount</code>; newer files may add <code>Account Type</code> and <code>Suppressed</code>, which are ignored.</li>
         </ol>
-        <p className="small muted">Trans codes read: <code>Buy</code>, <code>Sell</code>, <code>SPL</code>/<code>SPR</code> (splits: Quantity is the shares added), <code>ACATI</code>/<code>ACATO</code> (transfers, flagged). Options codes (<code>BTO, STC, STO, BTC, OEXP, OASGN, OEXCS</code>) are listed as limitations. Dividends, deposits, interest and fees are skipped and shown in the validation report. The file lists newest first and ends with a disclaimer row; both are handled. Descriptions containing “Recurring” or “Reinvest” tag automatic buys. Robinhood Crypto activity is not in this report and crypto is not covered by §1091 in any case.</p>
+        <p className="small muted">Trans codes read: <code>Buy</code>, <code>Sell</code>, <code>SPL</code>/<code>SPR</code> (splits: Quantity is the shares added), <code>ACATI</code>/<code>ACATO</code> (transfers, paired between your accounts when both files are imported, otherwise flagged). Options codes (<code>BTO, STC, STO, BTC, OEXP, OASGN, OEXCS</code>) are listed as limitations. Dividends, deposits, interest and fees are skipped and shown in the validation report. The file lists newest first and ends with a disclaimer row; both are handled. Descriptions containing “Recurring” or “Reinvest” tag automatic buys. Robinhood Crypto activity is not in this report and crypto is not covered by §1091 in any case.</p>
 
         <h3>Fidelity: account history</h3>
         <ol>
@@ -90,15 +90,16 @@ export default function Docs() {
           <li><b>Partial lots</b> are split by share count, with basis allocated to the cent so totals never drift. Fractional shares are supported to six decimals.</li>
           <li><b>Splits</b> scale share counts and keep total basis.</li>
           <li><b>Substantially identical</b> means the same ticker by default. You can add groups (for example VOO, IVV, SPLG); the IRS has not ruled on index funds from different issuers, so this is a conservative choice, not a requirement.</li>
-          <li><b>Broker replica.</b> For the 1099-B check, we rerun each account alone with exact tickers only. That is what a broker can see.</li>
+          <li><b>Broker replica.</b> For the 1099-B check, we rerun each account with exact tickers only and replacements in that account alone. That is what a broker can see; shares moved in from another account keep their dates and basis, as the sending broker’s transfer statement gives them.</li>
           <li><b>Harvest planner.</b> Selling on a date is blocked if any account bought the same group in the prior 30 days and would keep those shares. Selling a group sells its recent loss lots too. Recurring buys are detected from labels and from steady cadence and amounts; DRIP from reinvestment rows.</li>
+          <li><b>Transfers between your accounts</b> are not purchases or sales. A transfer out is paired with a transfer in of the same ticker and quantity in another account (up to 3 days before or 10 days after, or one transfer split across several rows), and the lots arrive with their acquisition dates, adjusted basis including wash sale adjustments, and holding period. The sending broker must report exactly that (Treas. Reg. §1.6045A-1(b)(1)(vii)). If two accounts match equally well, nothing is guessed. Taxable to or from an IRA or Roth is not a carry-over: an IRA accepts only cash contributions (IRC §408(a)(1)) and shares distributed from one are income (§408(d)(1)), so those moves are listed under the wash sales table and not turned into purchases.</li>
         </ul>
 
         <h2 id="limits">Limitations</h2>
         <ul>
           <li>Options, short sales, futures and crypto are not analysed. Options on a stock can be substantially identical to it; check option losses by hand.</li>
           <li>Mergers, spin-offs, ticker changes and return of capital are not modelled; a ticker change looks like a sale and a new purchase.</li>
-          <li>Transfers in without a cost are flagged. Add them as <code>transfer_in</code> rows with the original cost and date in the generic format.</li>
+          <li>A transfer in that matches no transfer out is not treated as a purchase. Import the sending account, or add it as a <code>transfer_in</code> row with the original cost and <code>lot_date</code> in the generic format; without a date its shares are left out and the row is flagged.</li>
           <li>Prices for the harvest planner are typed in. No quote feed is called: there is no free, keyless one that browsers can use directly.</li>
           <li>Form 8949 box (A/D vs B/E) is assumed from covered securities; follow your 1099-B.</li>
         </ul>

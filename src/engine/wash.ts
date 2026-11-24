@@ -44,20 +44,85 @@ function splitLot(lot: Lot, qty: number, nextId: () => string): Lot | null {
   return rest
 }
 
+/** Shares from a transfer out: how many go to which transfer in, in order. */
+interface Move { to: { t: Txn; qty: number }[]; /** False for taxable <-> IRA/Roth, which is not a carry-over. */ carry: boolean }
+
+/** A transfer in is recorded this many days before, or this many days after, the matching transfer out (settlement lag). */
+export const TRANSFER_DAYS = { before: 3, after: 10 }
+
+/**
+ * Pairs transfers out with transfers in between two accounts: same ticker, same quantity (or a transfer split across
+ * several rows on one side), the transfer in within a few days after the transfer out. Nearest date first; if two other
+ * accounts match equally well the pair is left unmatched and reported rather than guessed.
+ */
+function matchTransfers(sorted: Txn[], taxable: (id: string) => boolean) {
+  const moves = new Map<string, Move>()
+  const matchedIn = new Set<string>()
+  const limitations: Limitation[] = []
+  const unclear = new Set<string>()
+  const free = (t: Txn) => !unclear.has(t.id) && (t.kind === 'transfer_out' ? !moves.has(t.id) : !matchedIn.has(t.id))
+  /** Days from the transfer out to the transfer in. */
+  const gap = (out: Txn, tin: Txn) => diffDays(out.date, tin.date)
+  /** Unmatched rows of the other kind in the other accounts, same ticker, close enough in date. */
+  const pool = (t: Txn, kind: Txn['kind']) => sorted.filter(x => {
+    if (x.kind !== kind || x.symbol !== t.symbol || x.accountId === t.accountId || !free(x)) return false
+    const lag = kind === 'transfer_in' ? gap(t, x) : gap(x, t)
+    return lag >= -TRANSFER_DAYS.before && lag <= TRANSFER_DAYS.after
+  })
+  /** The nearest single row of the right size, else the rows of one account that add up to it, else null (or 'tie'). */
+  const find = (t: Txn, rows: Txn[], dist: (x: Txn) => number): Txn[] | 'tie' | null => {
+    const same = rows.filter(x => Math.abs(x.qty - t.qty) <= EPS).sort((a, b) => Math.abs(dist(a)) - Math.abs(dist(b)) || a.seq - b.seq)
+    if (same.length) return same.length > 1 && Math.abs(dist(same[0])) === Math.abs(dist(same[1])) && same[0].accountId !== same[1].accountId ? 'tie' : [same[0]]
+    for (const id of new Set(rows.map(x => x.accountId))) {
+      const mine = rows.filter(x => x.accountId === id)
+      let sum = 0
+      const part: Txn[] = []
+      for (const x of mine) { sum = q6(sum + x.qty); part.push(x); if (Math.abs(sum - t.qty) <= EPS) return part; if (sum > t.qty) break }
+    }
+    return null
+  }
+  const ambiguous = (t: Txn) => { unclear.add(t.id); limitations.push({ kind: 'transfer', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Transfer of ${t.qty} ${t.symbol} could belong to more than one other account. It was not matched: add the original dates (generic format) or remove the duplicate rows.` }) }
+  const claim = (outs: { t: Txn; qty: number; to: Txn }[]) => {
+    for (const o of outs) {
+      const mv = moves.get(o.t.id) ?? { to: [], carry: taxable(o.t.accountId) === taxable(o.to.accountId) }
+      mv.to.push({ t: o.to, qty: o.qty })
+      moves.set(o.t.id, mv)
+      matchedIn.add(o.to.id)
+    }
+  }
+  for (const out of sorted) {
+    if (out.kind !== 'transfer_out' || !free(out)) continue
+    const m = find(out, pool(out, 'transfer_in'), x => gap(out, x))
+    if (m === 'tie') { ambiguous(out); continue }
+    if (m) claim(m.map(x => ({ t: out, qty: x.qty, to: x })))
+  }
+  // Several transfers out received as one transfer in.
+  for (const tin of sorted) {
+    if (tin.kind !== 'transfer_in' || !free(tin)) continue
+    const m = find(tin, pool(tin, 'transfer_out'), x => gap(x, tin))
+    if (m === 'tie') { ambiguous(tin); continue }
+    if (m) claim(m.map(x => ({ t: x, qty: x.qty, to: tin })))
+  }
+  return { moves, matchedIn, limitations }
+}
+
 export function runWash(txns: Txn[], accounts: Account[], settings: Settings, opts: RunOptions = {}): WashResult {
   const acct = new Map(accounts.map(a => [a.id, a]))
   const typeOf = (id: string) => acct.get(id)?.type ?? 'taxable'
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date) || a.seq - b.seq)
+  const accountName = (id: string) => acct.get(id)?.name ?? id
+  const transfers = matchTransfers(sorted, id => typeOf(id) === 'taxable')
   let n = 0
   const nextId = () => `L${++n}`
   const lots: Lot[] = []
   const pieces: Piece[] = []
-  const limitations: Limitation[] = []
+  const limitations: Limitation[] = [...transfers.limitations]
 
   for (const t of sorted) {
-    const isBuy = t.kind === 'buy' || (t.kind === 'transfer_in' && t.amount > 0)
+    // A transfer in is a purchase only when it says when the shares were really bought; a matched one brings its lots with it.
+    const isBuy = t.kind === 'buy' || (t.kind === 'transfer_in' && t.amount > 0 && !!t.lotDate && !transfers.matchedIn.has(t.id))
     if (!isBuy) continue
-    const acquired = t.kind === 'transfer_in' && t.lotDate ? t.lotDate : t.date
+    const acquired = t.kind === 'transfer_in' ? t.lotDate! : t.date
     const lot: Lot = {
       id: nextId(), accountId: t.accountId, accountType: typeOf(t.accountId), symbol: t.symbol, group: groupOf(t.symbol, settings),
       acquired, arrived: t.date, holdingStart: acquired, qty: q6(t.qty), cost: t.amount, adj: 0, adjFrom: [], usedAsReplacement: false, buyId: t.id, seq: t.seq, auto: t.auto,
@@ -73,12 +138,16 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
       limitations.push({ kind: t.kind, accountId: t.accountId, symbol: t.symbol, date: t.date, message: t.kind === 'option' ? 'Options are not analysed. Options on the same stock can be substantially identical, so check option losses by hand.' : 'Short sales are not analysed.' })
       continue
     }
-    if (t.kind === 'transfer_in' && t.amount <= 0) {
-      limitations.push({ kind: 'transfer', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Transfer in of ${t.qty} ${t.symbol} has no cost basis. Add it as a buy with the original date and cost (generic format) so later sales match.` })
+    if (t.kind === 'transfer_in') {
+      if (transfers.matchedIn.has(t.id)) continue
+      if (t.amount <= 0) limitations.push({ kind: 'transfer', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Transfer in of ${t.qty} ${t.symbol} has no cost basis. Add it as a buy with the original date and cost (generic format) so later sales match.` })
+      else if (!t.lotDate) limitations.push({ kind: 'transfer', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Transfer in of ${t.qty} ${t.symbol} matches no transfer out and gives no original purchase date, so it is not treated as a purchase and its shares are left out. Import the sending account, or add the original date (lot_date) and cost (generic format).` })
       continue
     }
     if (t.kind === 'transfer_out') {
-      limitations.push({ kind: 'transfer', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Transfer out of ${t.qty} ${t.symbol}. The shares and any wash sale basis go with them; import the receiving account to keep following them.` })
+      const mv = transfers.moves.get(t.id)
+      if (mv) { moveShares(t, mv); continue }
+      limitations.push({ kind: 'transfer', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Transfer out of ${t.qty} ${t.symbol} matches no transfer in to another account (same ticker and quantity, up to ${TRANSFER_DAYS.after} days later). The shares and any wash sale basis go with them; import the receiving account to keep following them.` })
       closeShares(t)
       continue
     }
@@ -113,6 +182,49 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
   }
 
   function closeShares(t: Txn) { takeShares(t) }
+
+  /**
+   * A transfer between two of your own accounts is not a sale or a purchase: the lots arrive in the other account with the
+   * same acquisition dates, adjusted basis (wash sale adjustments included) and holding period, as the sending broker's
+   * transfer statement must say (Treas. Reg. §1.6045A-1(b)(1)(vii)). Taxable to or from an IRA or Roth is different: an
+   * IRA accepts only cash contributions (IRC §408(a)(1)) and an in-kind distribution is income (§408(d)(1)), so the
+   * shares are taken out and the move is reported, not carried.
+   */
+  function moveShares(t: Txn, mv: Move) {
+    const taken = takeShares(t)
+    const from = accountName(t.accountId)
+    if (!mv.carry) {
+      limitations.push({ kind: 'transfer', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Transfer of ${t.qty} ${t.symbol} between ${from} and ${accountName(mv.to[0].t.accountId)} moves shares between a taxable and an IRA or Roth account. That is not a simple carry-over (an IRA takes only cash contributions, and shares leaving one are a distribution), so the shares were taken out of ${from} and not added to the other account, and no wash sale was worked out from the move. Check with your broker how it was reported.` })
+      return
+    }
+    // Hand the lots (oldest first) to the transfers in, splitting a lot where one transfer in ends and the next begins.
+    const queue = [...taken]
+    let i = 0
+    let room = mv.to[0].qty
+    while (queue.length) {
+      const l = queue.shift()!
+      const last = i === mv.to.length - 1
+      const take = last ? l.qty : Math.min(room, l.qty)
+      l.closedBy = undefined
+      const rest = take < l.qty - EPS ? splitLot(l, take, nextId) : null
+      addLot(rest, l)
+      const dest = mv.to[i].t
+      l.accountId = dest.accountId
+      l.accountType = typeOf(dest.accountId)
+      l.arrived = dest.date
+      l.seq = dest.seq
+      room = q6(room - take)
+      if (rest) queue.unshift(rest)
+      if (room <= EPS && !last) room = mv.to[++i].qty
+    }
+    if (mv.to.length === 1 && taken.length) {
+      const [{ t: tin }] = mv.to
+      const lots = taken.filter(l => l.accountId === tin.accountId && l.arrived === tin.date && l.seq === tin.seq)
+      const cost = lots.reduce((x, l) => x + l.cost, 0), adj = lots.reduce((x, l) => x + l.adj, 0)
+      if (tin.amount > 0 && Math.abs(tin.amount - cost) > 2 && Math.abs(tin.amount - (cost - adj)) > 2) limitations.push({ kind: 'transfer', accountId: tin.accountId, symbol: t.symbol, date: tin.date, message: `${accountName(tin.accountId)} gives a basis of ${(tin.amount / 100).toFixed(2)} for the ${tin.qty} ${t.symbol} transferred in, but the lots carried from ${from} have ${(cost / 100).toFixed(2)}${adj ? ` (${((cost - adj) / 100).toFixed(2)} without wash sale adjustments)` : ''}. The carried lots were used.` })
+      if (tin.lotDate && lots.some(l => l.acquired !== tin.lotDate)) limitations.push({ kind: 'transfer', accountId: tin.accountId, symbol: t.symbol, date: tin.date, message: `${accountName(tin.accountId)} gives ${tin.lotDate} as the original purchase date of the ${tin.qty} ${t.symbol} transferred in, but the lots carried from ${from} were bought ${[...new Set(lots.map(l => l.acquired))].join(', ')}. The carried dates were used.` })
+    }
+  }
 
   function sell(t: Txn) {
     const taken = takeShares(t)
@@ -252,14 +364,11 @@ export function chainOf(res: WashResult, pieceId: string): { back: Piece[]; forw
 
 /** What a broker computes: same account, same ticker, nothing else. Run per taxable account. */
 export function brokerView(txns: Txn[], accounts: Account[], settings: Settings): WashResult {
-  const out: WashResult = { pieces: [], lots: [], limitations: [] }
-  for (const a of accounts) {
-    if (a.type !== 'taxable') continue
-    const r = runWash(txns.filter(t => t.accountId === a.id), [a], { ...settings, equivalents: [] }, { sameAccountOnly: true })
-    out.pieces.push(...r.pieces)
-    out.lots.push(...r.lots)
-  }
-  return out
+  // One run over every account, replacements looked for in the selling account only, so that lots carried in by a
+  // transfer between two accounts arrive with their dates and basis, as the sending broker's transfer statement gives them.
+  const r = runWash(txns, accounts, { ...settings, equivalents: [] }, { sameAccountOnly: true })
+  const taxable = new Set(accounts.filter(a => a.type === 'taxable').map(a => a.id))
+  return { pieces: r.pieces.filter(p => taxable.has(p.accountId)), lots: r.lots.filter(l => taxable.has(l.accountId)), limitations: [] }
 }
 
 export interface ReconLine {
