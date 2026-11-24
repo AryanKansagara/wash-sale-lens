@@ -1,0 +1,4 @@
+date,action,symbol,quantity,price
+2025-01-06,buy,ACME,200,20.00
+2025-03-03,sell,ACME,100,10.00
+2025-03-05,transfer_out,ACME,100,

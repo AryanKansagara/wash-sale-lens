@@ -192,7 +192,7 @@ export function validate(csv: { rows: string[][]; lines: number[] }, map: Mappin
     else if (!Number.isNaN(price)) amount = kind === 'sell' ? qty * price - fees : qty * price + fees
     else if (kind === 'transfer_in' || kind === 'transfer_out') amount = 0
     else { skipped++; issues.push({ line, message: `${kind === 'buy' ? 'Buy' : 'Sell'} of ${symbol} has neither price nor amount` }); continue }
-    if (kind === 'transfer_in' || kind === 'transfer_out') issues.push({ line, message: `Transfer ${kind === 'transfer_in' ? 'in' : 'out'} of ${qty} ${symbol}${amount ? '' : ' with no cost basis'}: flagged as a limitation`, level: 'warn' })
+    if (kind === 'transfer_in' || kind === 'transfer_out') issues.push({ line, message: `Transfer ${kind === 'transfer_in' ? 'in' : 'out'} of ${qty} ${symbol}${amount ? '' : ' with no cost basis'}: paired with the matching transfer in your other account if you import it, otherwise flagged as a limitation`, level: 'warn' })
     const lotDate = parseDate(get(rec, 'lotDate')) ?? undefined
     const cusip = (get(rec, 'cusip') || desc.match(/CUSIP:?\s*([0-9A-Z]{9})/i)?.[1] || '').toUpperCase() || undefined
     const auto = kind === 'buy' ? autoTag(action, desc) : undefined
