@@ -44,6 +44,58 @@ function splitLot(lot: Lot, qty: number, nextId: () => string): Lot | null {
   return rest
 }
 
+const fmtRatio = (r: number) => r >= 1 ? `${+r.toFixed(4)}-for-1` : `1-for-${+(1 / r).toFixed(4)}`
+
+/** One stock split: the ratio (new shares per old share) and where each reporting account placed it in its own history. */
+interface SplitGroup { symbol: string; date: string; ratio: number; at: Map<string, { date: string; seq: number }> }
+
+/**
+ * Works out each split row's ratio and groups the same split reported by several accounts. A ratio column is used as given;
+ * a row that only says how many shares were added needs the shares held just before it. Rows within 3 days of each other
+ * in the same ticker with the same ratio are one split, so an account that reports none can borrow the ratio.
+ */
+function readSplits(sorted: Txn[], names: (id: string) => string, adds: (t: Txn) => boolean) {
+  const held = new Map<string, number>()
+  const ratioOf = new Map<string, number>()
+  const heldBefore = new Map<string, number>()
+  const rows = sorted.filter(t => t.kind === 'split')
+  for (const t of sorted) {
+    const k = `${t.accountId}|${t.symbol}`
+    const h = held.get(k) ?? 0
+    if (adds(t)) held.set(k, q6(h + t.qty))
+    else if (t.kind === 'sell' || t.kind === 'transfer_out') held.set(k, Math.max(0, q6(h - t.qty)))
+    else if (t.kind === 'split') {
+      const ratio = t.ratio ?? (h > EPS ? (h + t.qty) / h : 0)
+      ratioOf.set(t.id, ratio > 0 ? ratio : 0)
+      heldBefore.set(t.id, h)
+      held.set(k, ratio > 0 ? q6(h * ratio) : h)
+    }
+  }
+  const groups: SplitGroup[] = []
+  const groupOfRow = new Map<string, SplitGroup>()
+  const limitations: Limitation[] = []
+  const near = (g: SplitGroup, t: Txn) => g.symbol === t.symbol && Math.abs(diffDays(g.date, t.date)) <= 3 && !g.at.has(t.accountId)
+  const join = (g: SplitGroup, t: Txn) => { g.at.set(t.accountId, { date: t.date, seq: t.seq }); groupOfRow.set(t.id, g) }
+  for (const t of rows) {
+    const ratio = ratioOf.get(t.id)!
+    if (ratio <= 0) continue
+    const g = groups.find(g => near(g, t) && Math.abs(g.ratio / ratio - 1) < 1e-4)
+    if (g) { join(g, t); continue }
+    const clash = groups.find(g => near(g, t))
+    if (clash) limitations.push({ kind: 'split', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `${t.symbol} split on ${t.date} is ${fmtRatio(ratio)} in ${names(t.accountId)} but ${fmtRatio(clash.ratio)} in another account. Each account was adjusted as it reports; check which is right.` })
+    const created: SplitGroup = { symbol: t.symbol, date: t.date, ratio, at: new Map() }
+    join(created, t)
+    groups.push(created)
+  }
+  // A row with no ratio and no shares to measure it against: use the same split from another account if there is one.
+  for (const t of rows) {
+    if (ratioOf.get(t.id)! > 0) continue
+    const g = groups.find(g => near(g, t))
+    if (g) join(g, t)
+  }
+  return { groups, groupOfRow, heldBefore, limitations }
+}
+
 /** Shares from a transfer out: how many go to which transfer in, in order. */
 interface Move { to: { t: Txn; qty: number }[]; /** False for taxable <-> IRA/Roth, which is not a carry-over. */ carry: boolean }
 
@@ -112,11 +164,13 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date) || a.seq - b.seq)
   const accountName = (id: string) => acct.get(id)?.name ?? id
   const transfers = matchTransfers(sorted, id => typeOf(id) === 'taxable')
+  const splits = readSplits(sorted, accountName, t => t.kind === 'buy' || (t.kind === 'transfer_in' && (transfers.matchedIn.has(t.id) || (t.amount > 0 && !!t.lotDate))))
+  const splitsChecked = new Set<SplitGroup>()
   let n = 0
   const nextId = () => `L${++n}`
   const lots: Lot[] = []
   const pieces: Piece[] = []
-  const limitations: Limitation[] = [...transfers.limitations]
+  const limitations: Limitation[] = [...splits.limitations, ...transfers.limitations]
 
   for (const t of sorted) {
     // A transfer in is a purchase only when it says when the shares were really bought; a matched one brings its lots with it.
@@ -152,11 +206,16 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
       continue
     }
     if (t.kind === 'split') {
-      const open = lots.filter(l => l.accountId === t.accountId && l.symbol === t.symbol && !l.closedBy && before(arr(l), t) && l.qty > EPS)
-      const held = open.reduce((s, l) => s + l.qty, 0)
-      const ratio = t.ratio ?? (held > EPS ? (held + t.qty) / held : 0)
-      if (!ratio || ratio <= 0) { limitations.push({ kind: 'split', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Split in ${t.symbol} with no shares held; ignored.` }); continue }
-      for (const l of open) l.qty = q6(l.qty * ratio)
+      const g = splits.groupOfRow.get(t.id)
+      if (!g) { limitations.push({ kind: 'split', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Split in ${t.symbol} ignored: no ratio is given, and it cannot be worked out from ${Math.abs(t.qty)} shares ${t.qty < 0 ? "removed" : "added"} against ${splits.heldBefore.get(t.id)} held. Share counts bought or sold on either side of it cannot be compared: add the split ratio.` }); continue }
+      if (!splitsChecked.has(g)) {
+        splitsChecked.add(g)
+        // Another account holds the stock across this split but reports none: its shares are not adjusted, and we do not guess.
+        const missing = new Map<string, number>()
+        for (const l of lots) if (l.symbol === g.symbol && !g.at.has(l.accountId) && !l.closedBy && l.arrived < g.date && l.qty > EPS) missing.set(l.accountId, q6((missing.get(l.accountId) ?? 0) + l.qty))
+        for (const [id, qty] of missing) limitations.push({ kind: 'split', accountId: id, symbol: g.symbol, date: g.date, message: `${g.symbol} split ${fmtRatio(g.ratio)} on ${g.date} is reported in ${[...g.at.keys()].map(accountName).join(', ')}, but ${accountName(id)} held ${qty} shares then and reports no split. Those shares were not adjusted, so share counts compared across accounts around that date will not match. Add the split to ${accountName(id)}.` })
+      }
+      for (const l of lots) if (l.accountId === t.accountId && l.symbol === t.symbol && !l.closedBy && before(arr(l), t) && l.qty > EPS) l.qty = q6(l.qty * g.ratio)
       continue
     }
     if (t.kind !== 'sell') continue
@@ -179,6 +238,19 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
     }
     if (need > EPS) limitations.push({ kind: 'unmatched', accountId: t.accountId, symbol: t.symbol, date: t.date, message: `Sold ${t.qty} ${t.symbol} but only ${q6(t.qty - need)} shares were bought in the imported history. ${need} shares have no basis here: import earlier activity or add the buy.` })
     return taken
+  }
+
+  /**
+   * How many of a lot's own shares make one share counted on the sale date. Lots held at the sale are already counted that way
+   * (splits are applied as they happen). A lot bought after the sale was counted when bought, so each split between the sale
+   * and that purchase, as each account placed it, scales it.
+   */
+  function unitsSince(c: Lot, t: Txn): number {
+    if (before(arr(c), t)) return 1
+    const at = (g: SplitGroup, id: string) => g.at.get(id) ?? { date: g.date, seq: -1 }
+    let f = 1
+    for (const g of splits.groups) if (g.symbol === c.symbol && before(t, at(g, t.accountId)) && before(at(g, c.accountId), arr(c))) f *= g.ratio
+    return f
   }
 
   function closeShares(t: Txn) { takeShares(t) }
@@ -256,8 +328,10 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
       const holdDays = diffDays(p.holdingStart, t.date)
       for (const c of cands) {
         if (matched >= p.qty - EPS) break
-        const take = Math.min(p.qty - matched, c.qty)
-        addLot(splitLot(c, take, nextId), c)
+        const f = unitsSince(c, t)
+        const avail = q6(c.qty / f)
+        const take = Math.min(p.qty - matched, avail)
+        addLot(splitLot(c, take >= avail - EPS ? c.qty : q6(take * f), nextId), c)
         matched = q6(matched + take)
         const amount = Math.round(loss * matched / p.qty) - given
         given += amount
@@ -271,7 +345,7 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
           const tacked = addDays(c.acquired, -holdDays)
           if (tacked < c.holdingStart) c.holdingStart = tacked
         }
-        const r: Replacement = { lotId: c.id, accountId: c.accountId, accountType: c.accountType, acquired: c.acquired, qty: take, amount, symbol: c.symbol, permanent }
+        const r: Replacement = { lotId: c.id, accountId: c.accountId, accountType: c.accountType, acquired: c.acquired, qty: take, amount, symbol: c.symbol, permanent, ...(f !== 1 ? { lotQty: c.qty } : {}) }
         p.replacements.push(r)
         p.disallowed += amount
         if (permanent) p.permanent += amount

@@ -169,7 +169,7 @@ function Explain({ project, ds, a, piece, onOpen }: Pick<TabProps, 'project' | '
                   <tr key={i} title={srcOf(t)}>
                     <td>{fmtDay(r.acquired)}{t?.auto && <span className="chip neutral tiny">{t.auto === 'drip' ? 'DRIP' : 'auto'}</span>}</td>
                     <td>{accountName(project, r.accountId)}{r.symbol !== piece.symbol ? ` (${r.symbol})` : ''}</td>
-                    <td className="num">{shares(r.qty)}</td>
+                    <td className="num">{shares(r.qty)}{r.lotQty !== undefined && <small className="muted" title="Counted in the shares held on the sale date; a split came between the sale and this purchase"> ({shares(r.lotQty)} as bought)</small>}</td>
                     <td className={`num ${r.permanent ? 'loss' : 'neon-text'}`}>{money(r.amount)}</td>
                     <td>{brokerCanSee(piece, r) ? <span className="chip neutral">Reported</span> : r.permanent ? <span className="chip critical">Lost</span> : <span className="chip warn">You adjust</span>}</td>
                   </tr>

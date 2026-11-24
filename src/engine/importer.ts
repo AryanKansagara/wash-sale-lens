@@ -178,7 +178,9 @@ export function validate(csv: { rows: string[][]; lines: number[] }, map: Mappin
     const ratio = parseNum(get(rec, 'ratio'))
     if (kind === 'split') {
       if (!(qty > 0) && !(ratio > 0)) { skipped++; issues.push({ line, message: 'Split with no share quantity or ratio' }); continue }
-      out.push({ date, kind, symbol, qty: Number.isNaN(qty) ? 0 : qty, amount: 0, ...(ratio > 0 ? { ratio } : {}), desc, src: { file, line }, line })
+      // Shares added keep their sign: a negative number is shares removed (a reverse split).
+      out.push({ date, kind, symbol, qty: Number.isNaN(qtyRaw) ? 0 : qtyRaw, amount: 0, ...(ratio > 0 ? { ratio } : {}), desc, src: { file, line }, line })
+      if (/^spr$/i.test(action) && !(ratio > 0) && qtyRaw > 0) issues.push({ line, message: `Reverse split of ${symbol} gives only a positive quantity: read as ${qty} shares added. If it is shares removed, import it with a ratio (for example 0.1 for 1-for-10).`, level: 'warn' })
       continue
     }
     if (!(qty > 0)) { skipped++; issues.push({ line, message: `Quantity "${get(rec, 'qty')}" is not a positive number` }); continue }
