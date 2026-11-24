@@ -64,6 +64,7 @@ export default function Docs() {
           <li><code>amount</code>: total cost of a buy including fees, or net proceeds of a sale. If missing, quantity × price ± fees is used.</li>
           <li><code>lot_date</code>: for sales, the lot to sell first under specific ID; for transfers in, the original purchase date.</li>
           <li><code>ratio</code>: new shares per old share for a split (10 for a 10-for-1).</li>
+          <li><code>order_id</code> (optional): the broker’s order number. Buy rows with the same order number, ticker and day are fills of one purchase.</li>
         </ul>
 
         <h2 id="form1099">1099-B totals</h2>
@@ -87,10 +88,11 @@ export default function Docs() {
           <li><b>Lots.</b> Each buy is a lot. Sales use FIFO, or specific ID when your file names a lot and you choose it in the project’s matching rules.</li>
           <li><b>Order.</b> Loss sales are processed in date order across all accounts, so an earlier sale gets first claim on replacement shares.</li>
           <li><b>Replacement shares</b> are lots acquired in the window that are still held at the sale or bought after it, in any account, and not part of the sale itself. Shares bought and fully sold before a loss sale are not counted; this matches common broker practice, though the statute is not explicit.</li>
+          <li><b>One purchase, partly sold.</b> If you sell part of a single purchase at a loss, the shares you keep from that same purchase are not replacement shares for that loss (Rev. Rul. 56-602, 1956-2 C.B. 527: a sale of part of a lot is not a wash sale merely because it is part of the lot). Any other purchase in the 61 days, before or after, still is. Each buy row is its own purchase unless the file gives an order number (<code>order_id</code> in the generic format): rows that may be fills of one order are not merged, and the Wash sales tab shows both figures. Shares that already carry a deferred loss from an earlier wash sale keep the strict reading, also with both figures shown. Your broker may report this case differently; the 1099-B check shows the difference. The harvest planner never sells part of a lot, so it is unaffected.</li>
           <li><b>Partial lots</b> are split by share count, with basis allocated to the cent so totals never drift. Fractional shares are supported to six decimals.</li>
           <li><b>Splits</b> scale share counts and keep total basis.</li>
           <li><b>Substantially identical</b> means the same ticker by default. You can add groups (for example VOO, IVV, SPLG); the IRS has not ruled on index funds from different issuers, so this is a conservative choice, not a requirement.</li>
-          <li><b>Broker replica.</b> For the 1099-B check, we rerun each account alone with exact tickers only. That is what a broker can see.</li>
+          <li><b>Broker replica.</b> For the 1099-B check, we rerun each account alone with exact tickers only. That is what a broker can see. We also rerun it counting the kept shares of the same purchase, to show how much more a broker applying §1091(a) literally could report.</li>
           <li><b>Harvest planner.</b> Selling on a date is blocked if any account bought the same group in the prior 30 days and would keep those shares. Selling a group sells its recent loss lots too. Recurring buys are detected from labels and from steady cadence and amounts; DRIP from reinvestment rows.</li>
         </ul>
 

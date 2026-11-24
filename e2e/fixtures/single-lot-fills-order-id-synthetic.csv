@@ -1,0 +1,4 @@
+date,action,symbol,quantity,price,amount,order_id
+2025-03-03,buy,ACME,25,20.00,500.00,A-1001
+2025-03-03,buy,ACME,25,20.00,500.00,A-1001
+2025-03-13,sell,ACME,25,10.00,250.00,A-2002
