@@ -29,7 +29,14 @@ npm install
 npm run dev      # http://localhost:5173
 npm test         # engine and importer tests
 npm run build
+npm run test:e2e # browser tests against the production build (see below)
 ```
+
+### End-to-end tests
+
+`npm run test:e2e` builds the app, serves it with `vite preview` on `127.0.0.1:4173` (set `E2E_PORT` to use another port) and runs the Playwright suite in `e2e/` in Chromium. Install the browser once with `npx playwright install chromium` (add `--with-deps` on a fresh Linux machine).
+
+The tests are signed out, use only synthetic data (the sample traders and the CSVs in `e2e/fixtures/`), stub the Google Fonts requests and block every other external host, and fail on uncaught page errors. They cover opening a sample and a wash sale explanation, importing two accounts for a cross-account wash sale, the Form 8949 CSV (code W rows), the harvest planner's do-not-buy-until dates, a bad or unreadable file, and state surviving a reload. GitHub Actions runs install, build, `npm test` and `npm run test:e2e` on every pull request and push to `main`.
 
 Optional sync needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env`.
 
