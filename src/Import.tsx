@@ -217,7 +217,12 @@ function PendingCard({ p, accounts, onChange, onCancel, onCommit }: { p: Pending
           </label>
         </div>
       </div>
-      {!p.kind ? <p className="warn-text small">These columns do not match a format we know. Pick the file type, then map the columns.</p> : (
+      {!p.kind ? (
+        <>
+          <p className="warn-text small">These columns do not match a format we know. Pick the file type, then map the columns.</p>
+          <div className="row end gap-sm"><button type="button" className="btn ghost sm" onClick={onCancel}>Discard</button></div>
+        </>
+      ) : (
         <>
           <details className="mapping-wrap" open={p.format.startsWith('Generic') || p.format === 'Unknown' || !!errors.length}>
             <summary className="small">Column mapping</summary>
