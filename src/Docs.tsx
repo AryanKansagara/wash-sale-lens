@@ -63,7 +63,7 @@ export default function Docs() {
           <li><code>action</code>: buy, sell, split, transfer_in, transfer_out. Signed quantity works if there is no action column.</li>
           <li><code>amount</code>: total cost of a buy including fees, or net proceeds of a sale. If missing, quantity × price ± fees is used.</li>
           <li><code>lot_date</code>: for sales, the lot to sell first under specific ID; for transfers in, the original purchase date.</li>
-          <li><code>ratio</code>: new shares per old share for a split (10 for a 10-for-1).</li>
+          <li><code>ratio</code>: new shares per old share for a split (10 for a 10-for-1, 0.1 for a 1-for-10 reverse split). Without it, quantity is the shares added (negative if shares were removed), measured against the shares held just before.</li>
         </ul>
 
         <h2 id="form1099">1099-B totals</h2>
@@ -88,7 +88,7 @@ export default function Docs() {
           <li><b>Order.</b> Loss sales are processed in date order across all accounts, so an earlier sale gets first claim on replacement shares.</li>
           <li><b>Replacement shares</b> are lots acquired in the window that are still held at the sale or bought after it, in any account, and not part of the sale itself. Shares bought and fully sold before a loss sale are not counted; this matches common broker practice, though the statute is not explicit.</li>
           <li><b>Partial lots</b> are split by share count, with basis allocated to the cent so totals never drift. Fractional shares are supported to six decimals.</li>
-          <li><b>Splits</b> scale share counts and keep total basis.</li>
+          <li><b>Splits</b> scale share counts and keep total basis. A sale and its replacement shares are compared in one unit: shares bought after a split that falls between them are counted in the sale date’s shares (a 2-for-1 split makes 100 new shares replace 50 sold shares). Each account’s shares are scaled once, by the split that account reports; if an account held the stock across a split and reports none, its shares are not adjusted and the gap is listed under the wash sales table.</li>
           <li><b>Substantially identical</b> means the same ticker by default. You can add groups (for example VOO, IVV, SPLG); the IRS has not ruled on index funds from different issuers, so this is a conservative choice, not a requirement.</li>
           <li><b>Broker replica.</b> For the 1099-B check, we rerun each account alone with exact tickers only. That is what a broker can see.</li>
           <li><b>Harvest planner.</b> Selling on a date is blocked if any account bought the same group in the prior 30 days and would keep those shares. Selling a group sells its recent loss lots too. Recurring buys are detected from labels and from steady cadence and amounts; DRIP from reinvestment rows.</li>
