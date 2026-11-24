@@ -179,3 +179,14 @@ test('generic CSV: an order_id column is read onto buy rows only', () => {
   const c2 = trades(parseCsv(bare)); const d2 = detect(c2.rows)
   assert.equal(runWash(mergeImport([], 'rh', validate(c2, d2.map, d2.headerRow).rows), ACCTS, DEFAULT_SETTINGS).pieces[0].disallowed, 25000)
 })
+
+test('the two figures in a same-day note count shares across a split like the disallowed amount does', () => {
+  const row = (seq: number, date: string, kind: Txn['kind'], qty: number, amount: number, extra: Partial<Txn> = {}): Txn => ({ id: `n${seq}`, seq, accountId: 'A', date, kind, symbol: 'XYZ', qty, amount: amount * 100, ...extra })
+  const r = runWash([
+    row(1, '2026-03-02', 'buy', 100, 2000), row(2, '2026-03-02', 'buy', 20, 400), row(3, '2026-03-12', 'sell', 100, 1000),
+    row(4, '2026-03-14', 'split', 0, 0, { ratio: 2 }), row(5, '2026-03-16', 'buy', 80, 400),
+  ], [{ id: 'A', name: 'A', broker: 'generic', type: 'taxable' }], { method: 'fifo', equivalents: [] })
+  assert.equal(r.pieces.reduce((s, p) => s + p.disallowed, 0), 60000)
+  const note = r.limitations.find(l => l.kind === 'lot')!
+  assert.match(note.message, /\$600\.00 disallowed here, \$400\.00 if one purchase/)
+})

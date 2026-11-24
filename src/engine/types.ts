@@ -15,7 +15,7 @@ export interface Txn {
   qty: number
   /** Buys: total cost including fees. Sells: proceeds net of fees. Cents, always positive. */
   amount: number
-  /** For splits: new shares per old share. */
+  /** For splits: new shares per old share. Without it, `qty` is the shares added (negative if shares were removed). */
   ratio?: number
   /** Specific-ID sale: the acquisition date of the lot to sell first. */
   lotDate?: string
@@ -43,7 +43,10 @@ export interface Replacement {
   accountId: string
   accountType: AccountType
   acquired: string
+  /** Shares, counted as on the sale date. */
   qty: number
+  /** The shares as bought, when a split between the sale and the purchase makes that a different number than `qty`. */
+  lotQty?: number
   /** Disallowed loss moved into that lot's basis (zero basis change for IRA lots, which is the point). */
   amount: number
   symbol: string

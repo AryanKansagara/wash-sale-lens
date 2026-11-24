@@ -179,7 +179,9 @@ export function validate(csv: { rows: string[][]; lines: number[] }, map: Mappin
     const ratio = parseNum(get(rec, 'ratio'))
     if (kind === 'split') {
       if (!(qty > 0) && !(ratio > 0)) { skipped++; issues.push({ line, message: 'Split with no share quantity or ratio' }); continue }
-      out.push({ date, kind, symbol, qty: Number.isNaN(qty) ? 0 : qty, amount: 0, ...(ratio > 0 ? { ratio } : {}), desc, src: { file, line }, line })
+      // Shares added keep their sign: a negative number is shares removed (a reverse split).
+      out.push({ date, kind, symbol, qty: Number.isNaN(qtyRaw) ? 0 : qtyRaw, amount: 0, ...(ratio > 0 ? { ratio } : {}), desc, src: { file, line }, line })
+      if (/^spr$/i.test(action) && !(ratio > 0) && qtyRaw > 0) issues.push({ line, message: `Reverse split of ${symbol} gives only a positive quantity: read as ${qty} shares added. If it is shares removed, import it with a ratio (for example 0.1 for 1-for-10).`, level: 'warn' })
       continue
     }
     if (!(qty > 0)) { skipped++; issues.push({ line, message: `Quantity "${get(rec, 'qty')}" is not a positive number` }); continue }
@@ -191,7 +193,7 @@ export function validate(csv: { rows: string[][]; lines: number[] }, map: Mappin
     else if (!Number.isNaN(price)) amount = kind === 'sell' ? qty * price - fees : qty * price + fees
     else if (kind === 'transfer_in' || kind === 'transfer_out') amount = 0
     else { skipped++; issues.push({ line, message: `${kind === 'buy' ? 'Buy' : 'Sell'} of ${symbol} has neither price nor amount` }); continue }
-    if (kind === 'transfer_in' || kind === 'transfer_out') issues.push({ line, message: `Transfer ${kind === 'transfer_in' ? 'in' : 'out'} of ${qty} ${symbol}${amount ? '' : ' with no cost basis'}: flagged as a limitation`, level: 'warn' })
+    if (kind === 'transfer_in' || kind === 'transfer_out') issues.push({ line, message: `Transfer ${kind === 'transfer_in' ? 'in' : 'out'} of ${qty} ${symbol}${amount ? '' : ' with no cost basis'}: paired with the matching transfer in your other account if you import it, otherwise flagged as a limitation`, level: 'warn' })
     const lotDate = parseDate(get(rec, 'lotDate')) ?? undefined
     const cusip = (get(rec, 'cusip') || desc.match(/CUSIP:?\s*([0-9A-Z]{9})/i)?.[1] || '').toUpperCase() || undefined
     const auto = kind === 'buy' ? autoTag(action, desc) : undefined
