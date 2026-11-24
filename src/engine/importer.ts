@@ -24,6 +24,7 @@ export const KINDS: Record<Kind, { title: string; fields: FieldSpec[] }> = {
       F('lotDate', 'Lot acquired (specific ID)', 'date', ['lot_date', 'acquired', 'date_acquired', 'opendatetime', 'lot_acquired']),
       F('ratio', 'Split ratio', 'num', ['ratio', 'split_ratio']),
       F('cusip', 'CUSIP', 'str', ['cusip']),
+      F('orderId', 'Order number (fills of one order)', 'str', ['order_id', 'orderid', 'order_number', 'order_no'], false, 'Optional. Buy rows sharing an order number, ticker and day count as one purchase'),
     ],
   },
   form1099: {
@@ -196,7 +197,8 @@ export function validate(csv: { rows: string[][]; lines: number[] }, map: Mappin
     const lotDate = parseDate(get(rec, 'lotDate')) ?? undefined
     const cusip = (get(rec, 'cusip') || desc.match(/CUSIP:?\s*([0-9A-Z]{9})/i)?.[1] || '').toUpperCase() || undefined
     const auto = kind === 'buy' ? autoTag(action, desc) : undefined
-    out.push({ date, kind, symbol, qty, amount: cents(amount), desc, src: { file, line }, line, ...(lotDate ? { lotDate } : {}), ...(cusip ? { cusip } : {}), ...(auto ? { auto } : {}) })
+    const orderId = kind === 'buy' ? get(rec, 'orderId').trim().slice(0, 40) : ''
+    out.push({ date, kind, symbol, qty, amount: cents(amount), desc, src: { file, line }, line, ...(lotDate ? { lotDate } : {}), ...(cusip ? { cusip } : {}), ...(auto ? { auto } : {}), ...(orderId ? { orderId } : {}) })
   }
   // Robinhood and most brokers list newest first. Replay needs oldest first, keeping same-day order meaningful.
   const descending = out.length > 1 && out[0].date > out[out.length - 1].date

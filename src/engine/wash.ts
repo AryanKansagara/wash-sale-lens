@@ -23,7 +23,12 @@ export function groupOf(symbol: string, settings: Pick<Settings, 'equivalents'>)
 export interface RunOptions {
   /** Only look for replacement shares in the account that sold. With no equivalents this is what a broker can see. */
   sameAccountOnly?: boolean
+  /** Count the unsold shares of the purchase a loss sale came from as replacement shares. Off by default
+   * (Rev. Rul. 56-602); on, it is the strict reading of §1091(a) that a broker's system may apply. */
+  countSamePurchase?: boolean
 }
+
+const dollars = (c: number) => `$${(c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const before = (a: { date: string; seq: number }, b: { date: string; seq: number }) => a.date < b.date || (a.date === b.date && a.seq < b.seq)
 
@@ -171,6 +176,13 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
   const lots: Lot[] = []
   const pieces: Piece[] = []
   const limitations: Limitation[] = [...splits.limitations, ...transfers.limitations]
+  const txnById = new Map<string, Txn>()
+  for (const t of sorted) if (!txnById.has(t.id)) txnById.set(t.id, t)
+  /** One purchase: a single buy row, or all the fills the file labels with the same order number (same account, ticker, day). */
+  const purchaseOf = (buyId: string) => {
+    const t = txnById.get(buyId)
+    return t?.orderId && t.kind === 'buy' ? `${t.accountId}|${t.symbol}|${t.date}|${t.orderId}` : buyId
+  }
 
   for (const t of sorted) {
     // A transfer in is a purchase only when it says when the shares were really bought; a matched one brings its lots with it.
@@ -315,14 +327,43 @@ export function runWash(txns: Txn[], accounts: Account[], settings: Settings, op
       return p
     })
     // Loss shares are matched in the order they were acquired (Reg. §1.1091-1(b)).
-    for (const p of salePieces) {
+    for (const [pi, p] of salePieces.entries()) {
       const loss = p.cost - p.proceeds
       if (loss <= 0) continue
       const group = groupOf(p.symbol, settings)
       const lo = addDays(t.date, -WINDOW), hi = addDays(t.date, WINDOW)
-      const cands = lots
+      const sold = taken[pi]
+      const key = purchaseOf(sold.buyId)
+      // Rev. Rul. 56-602: selling part of one purchase is not a wash sale because of the part kept. Shares that carry a
+      // deferred loss from an earlier wash sale are outside what the ruling says, so they keep the strict reading.
+      const carried = sold.usedAsReplacement
+      const skipSame = !opts.countSamePurchase && !carried
+      const eligible = lots
         .filter(l => !l.closedBy && !l.usedAsReplacement && l.group === group && l.qty > EPS && l.acquired >= lo && l.acquired <= hi && (!opts.sameAccountOnly || l.accountId === t.accountId))
         .sort(byAcq)
+      const cands = skipSame ? eligible.filter(l => purchaseOf(l.buyId) !== key) : eligible
+      // Other buy rows of the same ticker and day in this account might be fills of the same order; with no order number to say so, they stay separate.
+      const mayBeFill = (l: Lot) => {
+        const a = txnById.get(sold.buyId), b = txnById.get(l.buyId)
+        return !!a && !!b && a.kind === 'buy' && b.kind === 'buy' && l.buyId !== sold.buyId && purchaseOf(l.buyId) !== key && !(a.orderId && b.orderId) && l.accountId === sold.accountId && l.symbol === sold.symbol && l.acquired === sold.acquired
+      }
+      // What the loss would be with the other reading: both figures go in the note.
+      const disallowedWith = (list: Lot[]) => {
+        let m = 0
+        for (const c of list) { if (m >= p.qty - EPS) break; m = q6(m + Math.min(p.qty - m, c.qty / unitsSince(c, t))) }
+        return Math.round(loss * m / p.qty)
+      }
+      if (!opts.countSamePurchase) {
+        const now = disallowedWith(cands)
+        const note = (message: string) => limitations.push({ kind: 'lot', accountId: t.accountId, symbol: p.symbol, date: t.date, message })
+        if (carried) {
+          const alt = disallowedWith(eligible.filter(l => purchaseOf(l.buyId) !== key))
+          if (alt < now) note(`Sold ${fmtQty(p.qty)} ${p.symbol} that were themselves replacement shares for an earlier wash sale, and more shares of the same purchase are still held. Rev. Rul. 56-602 allows a loss on part of one purchase but does not speak to shares carrying a deferred loss, so the strict reading stands: ${dollars(now)} disallowed. If the ruling applied, ${dollars(alt)} would be.`)
+        } else {
+          const alt = disallowedWith(cands.filter(l => !mayBeFill(l)))
+          if (alt < now) note(`Sold ${fmtQty(p.qty)} ${p.symbol}; another buy row of ${p.symbol} on the same day (${sold.acquired}) in this account is counted as replacement shares. If it is part of the same order, Rev. Rul. 56-602 would allow more of the loss: ${dollars(now)} disallowed here, ${dollars(alt)} if one purchase. The file has no order number to tell, so they are treated as separate purchases (generic CSV: add an order_id column).`)
+        }
+      }
       let matched = 0
       let given = 0
       const holdDays = diffDays(p.holdingStart, t.date)
@@ -437,10 +478,10 @@ export function chainOf(res: WashResult, pieceId: string): { back: Piece[]; forw
 // ---------- Broker view and reconciliation ----------
 
 /** What a broker computes: same account, same ticker, nothing else. Run per taxable account. */
-export function brokerView(txns: Txn[], accounts: Account[], settings: Settings): WashResult {
+export function brokerView(txns: Txn[], accounts: Account[], settings: Settings, opts: Pick<RunOptions, 'countSamePurchase'> = {}): WashResult {
   // One run over every account, replacements looked for in the selling account only, so that lots carried in by a
   // transfer between two accounts arrive with their dates and basis, as the sending broker's transfer statement gives them.
-  const r = runWash(txns, accounts, { ...settings, equivalents: [] }, { sameAccountOnly: true })
+  const r = runWash(txns, accounts, { ...settings, equivalents: [] }, { ...opts, sameAccountOnly: true })
   const taxable = new Set(accounts.filter(a => a.type === 'taxable').map(a => a.id))
   return { pieces: r.pieces.filter(p => taxable.has(p.accountId)), lots: r.lots.filter(l => taxable.has(l.accountId)), limitations: [] }
 }
@@ -454,11 +495,13 @@ export interface ReconLine {
   ira: number
   equivalents: number
   knockOn: number
+  /** Loss we allow on shares sold from one purchase while the rest of it is kept (Rev. Rul. 56-602), which a broker applying §1091(a) literally may disallow. */
+  samePurchase: number
   unexplained?: number
 }
 
 /** Explains the gap between what you actually owe and what the 1099-B says, per account. */
-export function reconcile(full: WashResult, broker: WashResult, accounts: Account[], year: number, reported: Record<string, number | undefined>): ReconLine[] {
+export function reconcile(full: WashResult, broker: WashResult, accounts: Account[], year: number, reported: Record<string, number | undefined>, brokerStrict?: WashResult): ReconLine[] {
   return accounts.filter(a => a.type === 'taxable').map(a => {
     const mine = full.pieces.filter(p => p.accountId === a.id && yearOf(p.sold) === year)
     const theirs = broker.pieces.filter(p => p.accountId === a.id && yearOf(p.sold) === year)
@@ -471,9 +514,11 @@ export function reconcile(full: WashResult, broker: WashResult, accounts: Accoun
     const ours = mine.reduce((s, p) => s + p.disallowed, 0)
     const brokerTotal = theirs.reduce((s, p) => s + p.disallowed, 0)
     const rep = reported[a.id]
+    const strict = brokerStrict ? brokerStrict.pieces.filter(p => p.accountId === a.id && yearOf(p.sold) === year).reduce((s, p) => s + p.disallowed, 0) : brokerTotal
     return {
       accountId: a.id, ours, broker: brokerTotal, reported: rep, crossAccount, ira, equivalents,
       knockOn: ours - brokerTotal - crossAccount - ira - equivalents,
+      samePurchase: strict - brokerTotal,
       unexplained: rep === undefined ? undefined : rep - brokerTotal,
     }
   })

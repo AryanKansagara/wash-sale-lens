@@ -34,7 +34,8 @@ function Washes({ project, ds, a, year }: TabProps) {
   const tickers = new Map<string, number>()
   for (const p of washes) tickers.set(p.symbol, (tickers.get(p.symbol) ?? 0) + p.disallowed)
   const maxT = Math.max(1, ...tickers.values())
-  const lims = a.full.limitations.filter(l => yearOf(l.date) <= year)
+  const lims = a.full.limitations.filter(l => l.kind !== 'lot' && yearOf(l.date) <= year)
+  const notes = a.full.limitations.filter(l => l.kind === 'lot' && yearOf(l.date) === year)
   const piece = washes.find(p => p.id === open) ?? a.full.pieces.find(p => p.id === open)
 
   return (
@@ -57,8 +58,17 @@ function Washes({ project, ds, a, year }: TabProps) {
         </div>
       )}
 
+      {notes.length > 0 && (
+        <div className="fix-banner" data-testid="lot-notes">
+          <div>
+            <strong>{plural(notes.length, 'sale')} where the treatment of one purchase is a judgment call</strong>
+            <ul className="issues">{notes.map((l, i) => <li key={i}><span className="mono">{l.date}</span> {accountName(project, l.accountId)} · {l.message}</li>)}</ul>
+          </div>
+        </div>
+      )}
+
       {washes.length === 0 ? (
-        <Empty title={`No wash sales in ${year}`}><p className="muted">No loss sale in {year} had substantially identical shares bought 30 days before or after it in any account. {s.released ? `${money(s.released)} of earlier deferrals was released.` : ''}</p></Empty>
+        <Empty title={`No wash sales in ${year}`}><p className="muted">No loss sale in {year} had replacement shares bought 30 days before or after it in any account. {s.released ? `${money(s.released)} of earlier deferrals was released.` : ''}</p></Empty>
       ) : (
         <>
           <div className="grid-main">
@@ -242,7 +252,7 @@ function Form8949({ project, a, year }: TabProps) {
 
 function Reconcile({ project, a, year, update }: TabProps) {
   const reported = Object.fromEntries(project.accounts.map(x => [x.id, project.reported[x.id]?.[year]?.washDisallowed]))
-  const lines = reconcile(a.full, a.broker, project.accounts, year, reported)
+  const lines = reconcile(a.full, a.broker, project.accounts, year, reported, a.brokerStrict)
   const setRep = (acct: string, patch: Reported) => {
     const cur = project.reported[acct] ?? {}
     update({ reported: { ...project.reported, [acct]: { ...cur, [year]: { ...cur[year], ...patch } } } })
@@ -308,11 +318,12 @@ function Reconcile({ project, a, year, update }: TabProps) {
                   })}
                   <div className="wf total"><span>All accounts, all equivalents</span><div className="wf-track"><i style={{ left: 0, width: `${(l.ours / max) * 100}%` }} /></div><b>{money(l.ours)}</b></div>
                 </div>
+                {l.samePurchase > 0 && <div className="verdict warn" data-testid="same-purchase-note">If your broker applies §1091(a) literally, its box 1g can be up to <b>{money(l.samePurchase)}</b> higher than the replica: it may count the shares you kept from the same purchase as replacements for a loss on part of that purchase. We do not (Rev. Rul. 56-602), and the replica above follows that. Whether box 1g includes it depends on your broker.</div>}
                 {l.reported !== undefined && (
                   <div className={`verdict ${l.unexplained === 0 ? 'good' : 'warn'}`}>
                     {l.unexplained === 0
                       ? <>Your box 1g of {money(l.reported)} matches what the broker could see. {l.ours > l.broker ? <>The extra <b>{money(l.ours - l.broker)}</b> above is yours to report.</> : 'Nothing more to adjust.'}</>
-                      : <>Box 1g ({money(l.reported)}) differs from the replica by <b>{money(l.unexplained!, { sign: true })}</b>. Usual causes: trades before your imported history, options or short sales (not analysed), corporate actions, transfers in, or the broker matching by CUSIP rather than ticker.</>}
+                      : <>Box 1g ({money(l.reported)}) differs from the replica by <b>{money(l.unexplained!, { sign: true })}</b>.{l.samePurchase > 0 && l.unexplained === l.samePurchase ? <> That is exactly the same-purchase amount above: your broker disallowed it, and we allow it. Discuss it with your tax preparer; box 1g stays as the broker reported it.</> : null} Usual causes: trades before your imported history, options or short sales (not analysed), corporate actions, transfers in, or the broker matching by CUSIP rather than ticker.</>}
                   </div>
                 )}
                 {basisFix !== 0 && <div className="verdict warn">Sales in this account used shares carrying <b>{money(basisFix)}</b> of loss deferred from wash sales the broker could not see. Box 1e is too {basisFix > 0 ? 'low' : 'high'} by that amount; the 8949 CSV uses the corrected basis.</div>}

@@ -82,13 +82,13 @@ export function useProject(id: string) {
   return { loading: list === null || (project !== null && ds === null), project, ds, update, reload: () => setVersion(v => v + 1) }
 }
 
-export interface Analysis { full: WashResult; broker: WashResult; years: number[] }
+export interface Analysis { full: WashResult; broker: WashResult; /** The broker view with the unsold shares of the same purchase counted as replacements. */ brokerStrict: WashResult; years: number[] }
 
 export function useAnalysis(ds: Dataset | null, accounts: Account[] | undefined, settings: Settings | undefined): Analysis | null {
   return useMemo(() => {
     if (!ds || !accounts || !settings) return null
     const full = runWash(ds.txns, accounts, settings)
-    return { full, broker: brokerView(ds.txns, accounts, settings), years: years(full) }
+    return { full, broker: brokerView(ds.txns, accounts, settings), brokerStrict: brokerView(ds.txns, accounts, settings, { countSamePurchase: true }), years: years(full) }
   }, [ds, accounts, settings])
 }
 

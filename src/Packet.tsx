@@ -15,9 +15,10 @@ export default function Packet({ id }: { id: string }) {
 
   const s = summarize(a.full, year)
   const washes = a.full.pieces.filter(p => yearOf(p.sold) === year && p.disallowed > 0).sort((x, y) => x.sold.localeCompare(y.sold))
-  const rec = reconcile(a.full, a.broker, project.accounts, year, Object.fromEntries(project.accounts.map(x => [x.id, project.reported[x.id]?.[year]?.washDisallowed])))
+  const rec = reconcile(a.full, a.broker, project.accounts, year, Object.fromEntries(project.accounts.map(x => [x.id, project.reported[x.id]?.[year]?.washDisallowed])), a.brokerStrict)
   const rows = form8949Rows(a.full, project.accounts, year)
-  const lims = a.full.limitations.filter(l => yearOf(l.date) === year)
+  const lims = a.full.limitations.filter(l => l.kind !== 'lot' && yearOf(l.date) === year)
+  const lotNotes = a.full.limitations.filter(l => l.kind === 'lot' && yearOf(l.date) === year)
   const name = (aid: string) => accountName(project, aid)
 
   return (
@@ -88,6 +89,8 @@ export default function Packet({ id }: { id: string }) {
           <li>Disallowed loss added to replacement basis and holding period tacked (IRC §1091(d), §1223(3); Pub. 550). IRA and Roth replacements: loss disallowed, no basis increase (Rev. Rul. 2008-5).</li>
           <li>Substantially identical: same ticker{project.settings.equivalents.length ? `, plus taxpayer-chosen groups ${project.settings.equivalents.map(g => g.join('/')).join('; ')}` : ''}.</li>
           <li>Shares bought and fully sold before a loss sale are not treated as replacement shares.</li>
+          <li>Selling part of one purchase at a loss is not a wash sale because of the shares kept from that same purchase (Rev. Rul. 56-602); any other purchase in the 61 days still is a replacement. Some brokers may report differently.{rec.some(r => r.samePurchase > 0) ? ` Amount this affects in ${year}: ${rec.map(r => `${name(r.accountId)} ${money(r.samePurchase)}`).join('; ')}.` : ''}</li>
+          {lotNotes.map((l, i) => <li key={i}>{l.date}: {l.message}</li>)}
           {lims.length > 0 && <li>Not analysed: {lims.length} item(s) such as options, short sales or transfers without basis ({[...new Set(lims.map(l => l.kind))].join(', ')}).</li>}
         </ul>
         <p className="small muted">Sources: IRC §1091; Treas. Reg. §1.1091-1; IRS Publication 550, Investment Income and Expenses; Instructions for Form 8949; Rev. Rul. 2008-5. Not tax advice.</p>

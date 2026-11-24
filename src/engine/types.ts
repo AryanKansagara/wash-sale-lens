@@ -21,6 +21,8 @@ export interface Txn {
   lotDate?: string
   /** Recurring investment or dividend reinvestment, from the broker's description. */
   auto?: 'recurring' | 'drip'
+  /** Broker order number, if the file has one. Buy rows with the same order number, account, ticker and day are fills of one purchase (see `runWash`). */
+  orderId?: string
   cusip?: string
   desc?: string
   /** Where the row came from, for the validation report and the CPA packet. */
@@ -101,7 +103,7 @@ export interface Lot {
 
 export interface Issue { line: number; message: string; level?: 'error' | 'warn' | 'skip' }
 
-export interface Limitation { kind: 'option' | 'short' | 'transfer' | 'unmatched' | 'split'; accountId: string; symbol: string; date: string; message: string }
+export interface Limitation { kind: 'option' | 'short' | 'transfer' | 'unmatched' | 'split' | 'lot'; accountId: string; symbol: string; date: string; message: string }
 
 export interface WashResult {
   pieces: Piece[]
