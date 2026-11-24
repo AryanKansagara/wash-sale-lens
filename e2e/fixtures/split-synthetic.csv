@@ -1,0 +1,5 @@
+date,action,symbol,quantity,price,ratio
+2025-01-06,buy,ACME,100,20.00,
+2025-03-03,sell,ACME,100,10.00,
+2025-03-05,split,ACME,,,2
+2025-03-10,buy,ACME,100,5.00,
