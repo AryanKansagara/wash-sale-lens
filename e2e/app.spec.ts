@@ -151,6 +151,14 @@ test('a wrong-format or unreadable file gets a clear message and the app stays u
   await expect(bin).toContainText('These columns do not match a format we know')
   await expect(bin.getByRole('button', { name: /^Import/ })).toHaveCount(0)
 
+  // An unrecognised file can be dismissed without picking a type; only that card goes away.
+  await wrong.getByRole('button', { name: 'Discard' }).click()
+  await expect(wrong).toHaveCount(0)
+  await expect(bin).toBeVisible()
+  await bin.getByRole('button', { name: 'Discard' }).click()
+  await expect(bin).toHaveCount(0)
+  await expect(page.locator('.pending')).toHaveCount(0)
+
   // A real header over rows that are not trades: reported line by line, nothing can be imported.
   const junk = `${header}\nsoon,soon,soon,ACME,x,Buy,10,$1.00,($10.00)\n13/45/2025,x,x,ACME,x,Sell,10,$1.00,$10.00\n`
   await input.setInputFiles({ name: 'junk.csv', mimeType: 'text/csv', buffer: Buffer.from(junk) })
