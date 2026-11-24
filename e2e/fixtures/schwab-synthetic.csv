@@ -1,0 +1,4 @@
+"Transactions  for account Individual ...000 as of 11/06/2026 21:14:02 ET"
+Date,Action,Symbol,Description,Quantity,Price,Fees & Comm,Amount
+03/17/2025,Buy,ACME,ACME SYNTHETIC CORP,10,$82.00,,($820.00)
+"Transactions Total",,,,,,,($820.00)

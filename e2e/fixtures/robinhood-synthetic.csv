@@ -1,0 +1,7 @@
+Activity Date,Process Date,Settle Date,Instrument,Description,Trans Code,Quantity,Price,Amount
+3/3/2025,3/3/2025,3/4/2025,ACME,"Acme Synthetic Corp
+CUSIP: 000000AA1",Sell,10,$80.00,$800.00
+1/6/2025,1/6/2025,1/7/2025,ACME,"Acme Synthetic Corp
+CUSIP: 000000AA1",Buy,10,$100.00,($1,000.00)
+
+"Synthetic test data. Not a real account."
